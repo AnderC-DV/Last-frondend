@@ -1,0 +1,825 @@
+Componentes de plantillas
+Las plantillas constan de cuatro componentes principales que se definen cuando se crea una: encabezado, cuerpo, pie de página y botones. Los componentes que elijas para tus plantillas deben basarse en las necesidades de tu negocio. El único componente obligatorio es el cuerpo.
+
+Algunos componentes admiten variables, cuyos valores puedes proporcionar cuando usas la API de la nube o la API de instalaciones locales para enviar la plantilla en un mensaje de plantilla. Si tus plantillas usan variables, cuando las creas, es necesario incluir ejemplos de valores de variables.
+
+Encabezados
+Los encabezados son componentes opcionales que aparecen en la parte superior de los mensajes de plantillas. Los encabezados admiten texto, contenido multimedia (imágenes, videos, documentos) y ubicaciones.
+
+Todas las plantillas tienen un límite de un componente de encabezado.
+
+Encabezados de texto
+Puedes agregar encabezados de texto a tus plantillas de mensaje. El texto del encabezado acepta parámetros para programar su contenido.
+
+Los parámetros de texto se pueden ingresar en uno de los siguientes formatos:
+
+Posicional: se incluye una matriz de parámetros que corresponden a posiciones numéricas en el texto del cuerpo con ejemplos.
+Por ejemplo: “Hello John, your account balance is {{1}}” | [ “$1,000” ]
+Nominal: se incluyen objetos JSON que contengan un parámetro con nombre y ejemplos.
+Por ejemplo: { "param_name": "account_balance", "example": "$1,000" }
+
+Sintaxis del componente
+Agrega este componente de encabezado a la matriz de objetos ”components”[] cuando solicites el punto de conexión POST <WHATSAPP_BUSINESS_ACCOUNT_ID>/message_templates. Reemplaza las propiedades de los marcadores de posición que aparecen debajo utilizando la tabla de propiedades.
+
+Obtén más información sobre cómo enviar plantillas basadas en texto aquí.
+
+{ "type": "HEADER", "format": "TEXT", "text": "<HEADER_TEXT>", "example": { "header_text": [ // You must provide one of the inputs below when the <HEADER_TEXT> string contains parameters <POSITIONAL_PARAM_EXAMPLES> <BODY_TEXT_NAMED_PARAMS> ] } } 
+
+Propiedades
+
+Marcador de posición	Descripción	Valor de ejemplo
+<HEADER_TEXT>
+
+String | Obligatoria
+
+Cadena de texto sin formato. Puede contener hasta 1 parámetro.
+
+Si esta cadena contiene parámetros, debes incluir la propiedad example y valores de ejemplo de los parámetros, como se muestra en <POSITIONAL_PARAM_EXAMPLES> y en <HEADER_TEXT_NAMED_PARAMS> debajo.
+
+60 caracteres como máximo.
+
+“Our Holiday sale starts December 1st!”
+
+“Our new sale starts {{1}}”
+
+“Our new sale starts {{sale_start_date}}!”
+
+<POSITIONAL_PARAM_EXAMPLES>
+
+[String] | Opcional
+
+Es obligatorio cuando se usan parámetros posicionales en el texto del encabezado.
+
+Una matriz de String en la que cada cadena tiene el fin de representar el texto que podría ingresarse como parámetro al momento de enviar los mensajes, por ejemplo, el saldo de una cuenta bancaria o el nombre de un cliente.
+
+La cantidad de cadenas debe coincidir con la cantidad de variables incluidas en la cadena.
+
+["December 1st"]
+
+<HEADER_TEXT_NAMED_PARAMS>
+
+[JSON Object] | Opcional
+
+Es obligatorio cuando se usan variables con nombre en el texto del encabezado.
+
+Una matriz de objetos JSON que contiene cadenas param_name y example.
+
+“param_name”: el nombre de parámetro personalizado. Solo debe contener letras minúsculas y guiones bajos.
+“example”: el texto ilustrativo de ejemplo para el parámetro.
+[{
+ "param_name": "sale_start_date",
+ "example": "December 1st"
+}]
+          
+
+Ejemplo de parámetro posicional
+{
+  "type": "HEADER",
+  "format": "TEXT",
+  "text": "Our new sale starts {{1}}!",
+  "example": {
+    "header_text": [
+      "December 1st"
+    ]
+  }
+}
+
+Ejemplo de parámetro con nombre
+{
+  "type": "HEADER",
+  "format": "TEXT",
+  "text": "Our new sale starts {{sale_start_date}}!",
+  "example": {
+    "header_text_named_params": [
+      {
+        "param_name": "sale_start_date",
+        "example": "December 1st"
+      }
+    ]
+  }
+}
+Encabezados de contenido multimedia
+Los encabezados de contenido multimedia pueden ser una imagen, un video o un documento (por ejemplo, un PDF). Todos los contenidos multimedia se deben subir con la API de subida reanudable. La sintaxis para definir un encabezado de contenido multimedia es la misma para todos los tipos de medios.
+
+Sintaxis
+{
+  "type": "HEADER",
+  "format": "<FORMAT>",
+  "example": {
+    "header_handle": [
+      "<HEADER_HANDLE>"
+    ]
+  }
+}
+Propiedades
+
+Marcador de posición	Descripción	Valor de ejemplo
+<FORMAT>
+
+Indica el tipo de recurso del contenido multimedia. Configúralo en IMAGE, VIDEO o DOCUMENT.
+
+IMAGE
+
+<HEADER_HANDLE>
+
+Identificador de recursos de contenido multimedia subido. Usa la API de subida reanudable para generar un identificador de recurso.
+
+4::aW...
+
+Ejemplo
+{
+  "type": "HEADER",
+  "format": "IMAGE",
+  "example": {
+    "header_handle": [
+      "4::aW..."
+    ]
+  }
+}
+Encabezados de ubicación
+Los encabezados de ubicación aparecen como mapas genéricos en la parte superior de la plantilla y son útiles para el seguimiento de pedidos, actualizaciones de entrega, recogida o entrega de servicios de transporte, localización de tiendas físicas, etc. Cuando el usuario los toca, se abre la app de mapa predeterminada del usuario de la app y se carga la ubicación especificada. Se especifican las ubicaciones cuando envías la plantilla mediante la API de la nube o la API de instalaciones locales.
+
+Los encabezados de ubicación solo pueden usarse en las plantillas categorizadas como UTILITY o MARKETING. No se admiten las ubicaciones en tiempo real.
+
+Sintaxis
+{
+  "type": "HEADER",
+  "format": "LOCATION"
+}
+Propiedades
+Los valores de propiedades no se pueden personalizar.
+
+Ejemplo
+{
+  "type": "HEADER",
+  "format": "LOCATION"
+}
+Cuerpo
+El componente del cuerpo representa el texto principal de la plantilla de mensaje y solo incluye texto. Es el componente obligatorio para todas las plantillas.
+
+El texto del cuerpo acepta parámetros para programar su contenido.
+
+Los parámetros de texto se pueden ingresar en uno de los siguientes formatos:
+
+Posicional: se incluye una matriz de parámetros posicionales numerados que corresponden a posiciones numéricas en el texto del cuerpo con ejemplos.
+Por ejemplo: “Hello {{1}}, your account balance is {{2}}” | [ “John”, “$1,000” ]
+Nominal: se incluyen objetos JSON que contengan un parámetro con nombre y ejemplos.
+Por ejemplo: { "param_name": "order_id", "example": "335628"}
+Todas las plantillas tienen un límite de un componente de cuerpo.
+
+Sintaxis del componente
+Agrega este componente de cuerpo a la matriz de objetos ”components”[] cuando solicites el punto de conexión POST <WHATSAPP_BUSINESS_ACCOUNT_ID>/message_templates. Reemplaza las propiedades de los marcadores de posición que aparecen debajo utilizando la tabla de propiedades.
+
+Obtén más información sobre cómo enviar plantillas basadas en texto aquí.
+
+{ "type": "body", "text": "<BODY_TEXT>", "example": { "body_text": [ [ // You must provide one of the inputs below when the <BODY_TEXT> string contains parameters <POSITIONAL_PARAM_EXAMPLES> <BODY_TEXT_NAMED_PARAMS> ] ] } } 
+Propiedades
+Marcador de posición	Descripción	Valor de ejemplo
+<HEADER_TEXT>
+
+String | Obligatoria
+
+Cadena de texto sin formato. Puede contener varios parámetros.
+
+Si esta cadena contiene parámetros, debes incluir la propiedad example y valores de ejemplo de los parámetros, como se muestra en <POSITIONAL_PARAM_EXAMPLES> y en <BODY_TEXT_NAMED_PARAMS> debajo.
+
+1024 caracteres como máximo.
+
+“Shop our Holiday sale now!”
+
+“Shop now through {{1}} and use code {{2}} to get {{3}} off of all merchandise.”
+
+“Your {{order_id}}, is ready {{customer_name}}”
+
+<POSITIONAL_PARAM_EXAMPLES>
+
+[String] | Opcional
+
+Es obligatorio cuando se usan parámetros posicionales en el texto del cuerpo.
+
+Una matriz de cadenas en la que cada cadena tiene el fin de representar el texto que podría ingresarse como parámetro al momento de enviar los mensajes, por ejemplo, el saldo de una cuenta bancaria o el nombre de un cliente.
+
+La cantidad de cadenas debe coincidir con la cantidad de variables incluidas en la cadena.
+
+["the end of August","25OFF","25%"]
+
+<BODY_TEXT_NAMED_PARAMS>
+
+[JSON Object] | Opcional
+
+Se requiere cuando se usan variables con nombre en el texto del cuerpo.
+
+Una matriz de objetos JSON que contiene cadenas param_name y example.
+
+“param_name”: el nombre de parámetro personalizado. Solo debe contener letras minúsculas y guiones bajos.
+“example”: el texto ilustrativo de ejemplo para el parámetro.
+[{
+ "param_name": "order_id",
+ "example": "335628"
+},
+{
+ "param_name": "customer_name",
+ "example": "Shiva"
+}]
+          
+
+Ejemplo de parámetro posicional
+{
+  "type": "BODY",
+  "text": "Shop now through {{1}} and use code {{2}} to get {{3}} off of all merchandise.",
+  "example": {
+    "header_text": [
+      "the end of August","25OFF","25%"
+    ]
+  }
+}
+
+Ejemplo de parámetro con nombre
+{
+  "type": "BODY",
+  "text": "Your {{order_id}}, is ready {{customer_name}}.",
+  "example": {
+    "header_text_named_params": [
+      {
+        "param_name": "order_id",
+        "example": "335628"
+      },
+      {
+        "param_name": "customer_name",
+        "example": "Shiva"
+      }
+    ]
+  }
+}
+Pie de página
+Los pies de página son componentes opcionales de solo texto que aparecen inmediatamente después del componente de cuerpo. Las plantillas tienen un límite de un componente de pie de página.
+
+Sintaxis
+{
+  "type": "FOOTER",
+  "text": "<TEXT>"
+}
+Propiedades
+
+Marcador de posición	Descripción	Valor de ejemplo
+<TEXT>
+
+El texto que debe aparecer en el pie de página de la plantilla cuando se envía.
+
+
+60 caracteres como máximo.
+
+Use the buttons below to manage your marketing subscriptions
+
+Ejemplo
+{
+  "type": "FOOTER",
+  "text": "Use the buttons below to manage your marketing subscriptions"
+}
+Botones
+Los botones son componentes interactivos opcionales que realizan acciones concretas cuando se los toca. Las plantillas pueden tener una mezcla de hasta 10 componentes de botones en total. No obstante, hay límites para los botones individuales del mismo tipo y, también, para las combinaciones. Estos límites se describen a continuación.
+
+Los botones se definen dentro de un único objeto del componente de botones y se incluyen en una sola matriz buttons. Por ejemplo, esta plantilla usa un botón de número de teléfono y un botón de URL:
+
+{
+  "type": "BUTTONS",
+  "buttons": [
+    {
+      "type": "PHONE_NUMBER",
+      "text": "Call",
+      "phone_number": "15550051310"
+    },
+    {
+      "type": "URL",
+      "text": "Shop Now",
+      "url": "https://www.luckyshrub.com/shop/"
+    }
+  ]
+}
+Si una plantilla tiene más de tres botones, dos botones aparecerán en el mensaje entregado y los botones restantes se reemplazarán con un botón Ver todas las opciones. Al tocar el botón Ver todas las opciones, se revelan los botones restantes.
+
+
+Botones de copiar código
+Cuando el usuario de la app presiona los botones de copiar código, puede copiar una cadena de texto (que se define cuando se envía la plantilla en un mensaje de plantilla) en el portapapeles del dispositivo. Las plantillas tienen un límite de un botón de copiar código.
+
+Sintaxis
+{
+  "type": "COPY_CODE",
+  "example": "<EXAMPLE>"
+}
+Propiedades
+
+Marcador de posición	Descripción	Valor de ejemplo
+<EXAMPLE>
+
+Cadena que se copiará en el portapapeles del dispositivo cuando el usuario de la app lo presione.
+
+
+Máximo de 15 caracteres.
+
+250FF
+
+Ejemplo
+{
+  "type": "COPY_CODE",
+  "example": "250FF"
+}
+Botones de procesos
+Los botones de procesos se utilizan para enviar mensajes de procesos como plantillas.
+
+Los procesos se pueden crear rápidamente en Playground y adjuntar con formato JSON, o bien se puede especificar un identificador de proceso anterior.
+
+Sintaxis
+{
+  "type": "FLOW",
+  "text": "<TEXT>",
+  "flow_id": "<FLOW_ID>",
+  "flow_name": "<FLOW_NAME>",
+  "flow_json": "<FLOW_JSON>", 
+  "flow_action": "<FLOW_ACTION>",
+  "navigate_screen": "<NAVIGATE_SCREEN>",
+  "icon": "<ICON>"
+}
+Propiedades
+
+Marcador de posición	Descripción	Valor de ejemplo
+<TEXT>
+
+Texto de la etiqueta del botón.
+
+
+25 caracteres como máximo.
+
+Sign up
+
+<FLOW_ID>
+
+Identificador único del proceso proporcionado por WhatsApp. El proceso se debe publicar.
+
+No se puede usar si se proporcionan los atributos FLOW_JSON o FLOW_NAME. Se permite usar solo uno de los parámetros.
+
+123456789012345
+
+<FLOW_NAME>
+
+El nombre del proceso. Solo se admite en la API de la nube. El identificador del proceso se almacena en la plantilla de mensaje, no en el nombre, por lo que cambiar el nombre del proceso no afectará a las plantillas de mensajes existentes. El proceso se debe publicar.
+
+No se puede usar si se proporcionan los atributos FLOW_JSON o FLOW_ID. Se permite usar solo uno de los parámetros.
+
+Survey_Flow
+
+<FLOW_JSON>
+
+El proceso representado en una cadena con formato JSON, que especifica el diseño del proceso que se adjunta a la plantilla. Se puede generar rápidamente el proceso con formato JSON en el proceso de PlayGround. Consulta la referencia completa en la documentación sobre procesos JSON
+
+No se puede usar si se proporcionan los atributos FLOW_ID o FLOW_NAME. Se permite usar solo uno de los parámetros.
+
+"{\"version\": \"3.1\", \"screens\": [...]}"
+
+<FLOW_ACTION>
+
+navigate o data_exchange. Usa navigate para predefinir la primera pantalla como parte del mensaje de plantilla. Usa data_exchange para los casos de uso avanzados en los que tu punto de conexión proporciona la primera pantalla.
+
+
+Opcional. Valor predeterminado: navigate
+
+navigate
+
+<NAVIGATE_SCREEN>
+
+Opcional solo si flow_action es navigate. El id de la primera pantalla del proceso.
+
+
+Opcional. Valor predeterminado: FIRST_ENTRY_SCREEN
+
+flow_json_first_screen
+
+<ICON>
+
+Opcional. Se mostrará un icono predeterminado junto al botón si no se proporciona uno. Se permiten los valores DOCUMENT, PROMOTION y REVIEW.
+
+PROMOTION
+
+Ejemplo
+{
+  "type": "FLOW",
+  "text": "Sign up",
+  "icon": "PROMOTION",
+  "flow_json" : {
+    "version": "6.0",
+    "screens": [
+        {
+            "id": "WELCOME_SCREEN",
+            "layout": {
+                "type": "SingleColumnLayout",
+                "children": [
+                    {
+                        "type": "TextHeading",
+                        "text": "Hello World"
+                    },
+                    {
+                        "type": "TextBody",
+                        "text": "Let's start building things!"
+                    },
+                    {
+                        "type": "Footer",
+                        "label": "Complete",
+                        "on-click-action": {
+                            "name": "complete",
+                            "payload": {}
+                        }
+                    }
+                ]
+            },
+            "title": "Welcome",
+            "terminal": true,
+            "success": true,
+            "data": {}
+        }
+    ]
+  }
+}
+Botones de MPM
+Los botones de mensajes multiproducto (MPM) son botones especiales que no se pueden personalizar. Cuando se los toca, muestran hasta 30 productos de tu catálogo de comercio electrónico, organizados en un máximo de 10 secciones, en un solo mensaje. Consulta Plantillas de mensajes multiproducto.
+
+Botones de OTP
+Los botones de contraseña de un solo uso (OTP) son un tipo especial de componente botón de URL, y se utilizan con plantillas de autenticación. Consulta Plantillas de autenticación.
+
+Botones de número de teléfono
+Los botones de número de teléfono llaman al número de teléfono del negocio específico cuando el usuario de la app los toca. Las plantillas se limitan a un botón de número de teléfono.
+
+Sintaxis
+{
+  "type": "PHONE_NUMBER",
+  "text": "<TEXT>",
+  "phone_number": "<PHONE_NUMBER>"
+}
+Propiedades
+
+Marcador de posición	Descripción	Valor de ejemplo
+<PHONE_NUMBER>
+
+Cadena alfanumérica. El número de teléfono del negocio al que se llamará cuando el usuario toque el botón.
+
+Ten en cuenta que algunos países tienen números de teléfono especiales, que presentan ceros después del código de país (por ejemplo, +55-0-955-585-95436). Si asignas alguno de estos números al botón, se quitará el cero. Si tu número no funciona sin ese cero, asigna un número alternativo al botón, o bien, agrega el número como texto en el cuerpo del mensaje.
+
+20 caracteres como máximo.
+
+15550051310
+
+<TEXT>
+
+Texto de la etiqueta del botón.
+
+
+25 caracteres como máximo.
+
+Call
+
+Ejemplo
+{
+  "type": "PHONE_NUMBER",
+  "text": "Call",
+  "phone_number": "15550051310"
+}
+Botones de respuesta rápida
+Los botones de respuesta rápida son botones personalizados de solo texto que te envían inmediatamente un mensaje con la cadena de texto especificada cuando el usuario de la app los toca. Un caso de uso común es un botón que permite a tu cliente dejar de recibir fácilmente cualquier mensaje de marketing.
+
+Las plantillas se limitan a 10 botones de respuesta rápida. Si se utilizan botones de respuesta rápida con otros botones, los botones deben organizarse en dos grupos: botones de respuesta rápida y botones de respuesta no rápida. Si se agrupan incorrectamente, la API devolverá un error que indica que una combinación no es válida.
+
+Ejemplos de grupos válidos:
+
+Respuesta rápida, respuesta rápida
+Respuesta rápida, respuesta rápida, URL, teléfono
+URL, teléfono, respuesta rápida, respuesta rápida
+Ejemplos de grupos no válidos:
+
+Respuesta rápida, URL, respuesta rápida
+URL, respuesta rápida, URL
+Cuando se usa la API de la nube o la API de instalaciones locales para enviar una plantilla que tiene múltiples botones de respuesta rápida, puedes usar la propiedad de índice para designar el orden en el que aparecerán los botones en el mensaje de la plantilla.
+
+Sintaxis
+{
+  "type": "QUICK_REPLY",
+  "text": "<TEXT>"
+}
+Propiedades
+
+Marcador de posición	Descripción	Valor de ejemplo
+<TEXT>
+
+Texto de la etiqueta del botón.
+
+
+25 caracteres como máximo.
+
+Unsubscribe
+
+Ejemplo
+{
+  "type": "QUICK_REPLY",
+  "text": "Unsubscribe from Promos"
+}
+Botones de SPM
+Los botones de mensajes de un solo producto (SPM) son botones especiales que no se pueden personalizar y se pueden asignar a un producto de tu catálogo. Cuando se los toca, cargan detalles sobre el producto, que extraen de tu catálogo. Luego, los usuarios pueden agregar al producto su tarjeta y realizar un pedido. Consulta Plantillas de mensajes de un solo producto y Plantillas de secuencias de tarjetas de productos.
+
+Botones de URL
+Los botones de URL cargan la URL especificada en el navegador web predeterminado del dispositivo cuando el usuario de la app los toca. Las plantillas se limitan a dos botones URL.
+
+Sintaxis
+{
+  "type": "URL",
+  "text": "<TEXT>",
+  "url": "<URL>",
+
+  # Required if <URL> contains a variable
+  "example": [
+    "<EXAMPLE>"
+  ]
+}
+Propiedades
+
+Marcador de posición	Descripción	Valor de ejemplo
+<EXAMPLE>
+
+URL de sitio web. Admite 1 variable.
+
+
+Si usas una variable, agrega una muestra de propiedad de variable al final de la cadena de URL. La URL se carga en el navegador web móvil predeterminado del dispositivo cuando el cliente toca el botón.
+
+
+2.000 caracteres como máximo.
+
+https://www.luckyshrub.com/shop?promo=summer2023
+
+<TEXT>
+
+Texto de la etiqueta del botón. 25 caracteres como máximo.
+
+Shop Now
+
+<URL>
+
+URL del sitio web que se carga en el navegador web móvil predeterminado del dispositivo cuando el usuario de la app toca el botón.
+
+
+Admite 1 variable, añadida al final de la cadena de URL.
+
+
+2.000 caracteres como máximo.
+
+https://www.luckyshrub.com/shop?promo={{1}}
+
+Ejemplo
+{
+  "type": "URL",
+  "text": "Shop Now",
+  "url": "https://www.luckyshrub.com/shop?promo={{1}}",
+  "example": [
+    "summer2023"
+  ]
+}
+Oferta por tiempo limitado
+Los componentes de oferta por tiempo limitado son componentes especiales que se usan para crear plantillas de ofertas por tiempo limitado.
+
+Ejemplo de solicitudes
+Promoción estacional
+Un ejemplo de solicitud de creación de una plantilla de marketing con los siguientes componentes:
+
+un encabezado de texto con una variable y un valor de muestra
+un cuerpo de texto con variables y valores de muestra
+un pie de página de texto
+dos botones de respuesta rápida
+curl -L 'https://graph.facebook.com/v23.0/102290129340398/message_templates' \
+-H 'Authorization: Bearer EAAJB...' \
+-H 'Content-Type: application/json' \
+-d '
+{
+  "name": "seasonal_promotion",
+  "language": "en_US",
+  "category": "MARKETING",
+  "components": [
+    {
+      "type": "HEADER",
+      "format": "TEXT",
+      "text": "Our {{1}} is on!",
+      "example": {
+        "header_text": [
+          "Summer Sale"
+        ]
+      }
+    },
+    {
+      "type": "BODY",
+      "text": "Shop now through {{1}} and use code {{2}} to get {{3}} off of all merchandise.",
+      "example": {
+        "body_text": [
+          [
+            "the end of August","25OFF","25%"
+          ]
+        ]
+      }
+    },
+    {
+      "type": "FOOTER",
+      "text": "Use the buttons below to manage your marketing subscriptions"
+    },
+    {
+      "type":"BUTTONS",
+      "buttons": [
+        {
+          "type": "QUICK_REPLY",
+          "text": "Unsubscribe from Promos"
+        },
+        {
+          "type":"QUICK_REPLY",
+          "text": "Unsubscribe from All"
+        }
+      ]
+    }
+  ]
+}'
+Confirmación de pedido
+Un ejemplo de solicitud de creación de una plantilla de utilidad con los siguientes componentes:
+
+un encabezado de documento con un valor de muestra
+un cuerpo de texto con variables y valores de muestra
+un botón de número de teléfono
+un botón de URL
+curl -L 'https://graph.facebook.com/v16.0/102290129340398/message_templates' \
+-H 'Authorization: Bearer EAAJB...' \
+-H 'Content-Type: application/json' \
+-d '
+{
+  "name": "order_confirmation",
+  "language": "en_US",
+  "category": "UTILITY",
+  "components": [
+    {
+      "type": "HEADER",
+      "format": "DOCUMENT",
+      "example": {
+        "header_handle": [
+          "4::YX..."
+        ]
+      }
+    },
+    {
+      "type": "BODY",
+      "text": "Thank you for your order, {{1}}! Your order number is {{2}}. Tap the PDF linked above to view your receipt. If you have any questions, please use the buttons below to contact support. Thank you for being a customer!",
+      "example": {
+        "body_text": [
+          [
+            "Pablo","860198-230332"
+          ]
+        ]
+      }
+    },
+    {
+      "type": "BUTTONS",
+      "buttons": [
+        {
+          "type": "PHONE_NUMBER",
+          "text": "Call",
+          "phone_number": "15550051310"
+        },
+        {
+          "type": "URL",
+          "text": "Contact Support",
+          "url": "https://www.luckyshrub.com/support"
+        }
+      ]
+    }
+  ]
+}'
+Actualización de entrega del pedido
+Un ejemplo de solicitud de creación de una plantilla de utilidad con los siguientes componentes:
+
+un encabezado de ubicación
+un cuerpo de texto con variables y valores de muestra
+un pie de página
+un botón de respuesta rápida
+curl 'https://graph.facebook.com/v23.0/102290129340398/message_templates' \
+-H 'Content-Type: application/json' \
+-H 'Authorization: Bearer EAAJB...' \
+-d '
+{
+  "name": "order_delivery_update",
+  "language": "en_US",
+  "category": "UTILITY",
+  "components": [
+    {
+      "type": "HEADER",
+      "format": "LOCATION"
+    },
+    {
+      "type": "BODY",
+      "text": "Good news {{1}}! Your order #{{2}} is on its way to the location above. Thank you for your order!",
+      "example": {
+        "body_text": [
+          [
+            "Mark",
+            "566701"
+          ]
+        ]
+      }
+    },
+    {
+      "type": "FOOTER",
+      "text": "To stop receiving delivery updates, tap the button below."
+    },
+    {
+      "type":"BUTTONS",
+      "buttons": [
+        {
+          "type": "QUICK_REPLY",
+          "text": "Stop Delivery Updates"
+        }
+      ]
+    }
+  ]
+}'
+Webhook de actualización de componentes
+Suscríbete al campo de webhook message_template_components_update para recibir notificaciones de los cambios realizados en los componentes de una plantilla, como un cambio en el título o el cuerpo, o la adición de un botón.
+
+Formato de respuesta de webhook
+"message_template_id": <id>,
+"message_template_name": <string>,
+"message_template_language": <string>,
+"message_template_title": <string>,
+"message_template_element": <string>,
+"message_template_footer": <string>,
+"message_template_buttons": [
+  {
+    "message_template_button_type": <string>,
+    "message_template_button_text": <string>,
+    "message_template_button_url": <string>,
+    "message_template_button_phone_number": <string>
+  }
+]
+Ejemplo de respuesta de webhook
+"message_template_id": 1234567890,
+"message_template_name": “promo_summer_sale_11_en”,
+"message_template_language": “en_US”,
+"message_template_title": “header”,
+"message_template_element": “body”,
+"message_template_footer": “footer”,
+"message_template_buttons": [
+  {
+    "message_template_button_type": URL,
+    "message_template_button_text": “click me”,
+    "message_template_button_url": “https://www.example.com”,
+    "message_template_button_phone_number": “+1(123)4565678”
+  }
+]
+Campos de respuesta de webhook
+Campo	Descripción
+message_template_id
+
+Identificador
+
+Identificador de la plantilla.
+
+message_template_name
+
+Cadena
+
+Nombre de la plantilla.
+
+message_template_language
+
+Cadena
+
+Idioma de la plantilla.
+
+message_template_title
+
+Cadena
+
+Nuevo encabezado de la plantilla luego del cambio.
+
+Permanece vacío si el usuario no ingresó un encabezado.
+
+message_template_element
+
+Cadena
+
+Nuevo cuerpo de la plantilla luego del cambio.
+
+Permanece vacío si el usuario no ingresó un texto de cuerpo nuevo.
+
+message_template_footer
+
+Cadena
+
+Nuevo pie de página de la plantilla luego del cambio.
+
+Permanece vacío si el usuario no ingresó un texto de pie de página nuevo.
+
+message_template_buttons
+
+Matriz [botón]
+
+Nueva lista de botones de la plantilla luego del cambio.
+
+En este webhook, solo se admiten los botones de tipo URL y número de teléfono.

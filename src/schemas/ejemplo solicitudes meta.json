@@ -1,0 +1,215 @@
+1) Solo BODY (sin variables)
+{
+  "name": "promo_body_only",
+  "channel_type": "WHATSAPP",
+  "meta_template_name": "promo_body_only",
+  "category": "MARKETING",
+  "components": {
+    "body": {
+      "text": "Hola, tenemos promociones disponibles esta semana."
+    }
+  }
+}
+
+2) Solo BODY con variables
+{
+  "name": "body_only_with_vars",
+  "channel_type": "WHATSAPP",
+  "meta_template_name": "body_only_with_vars",
+  "category": "UTILITY",
+  "components": {
+    "body": {
+      "text": "Hola {nombre}, tu pedido #{numero_pedido} está listo.",
+      "example": {
+        "body_text": [
+          ["Ana", "566701"]
+        ]
+      }
+    }
+  }
+}
+
+3) BODY + FOOTER
+{
+  "name": "body_footer",
+  "channel_type": "WHATSAPP",
+  "meta_template_name": "body_footer",
+  "category": "MARKETING",
+  "components": {
+    "body": {
+      "text": "Recuerda visitar nuestra tienda para más novedades."
+    },
+    "footer": {
+      "text": "Responde STOP para dejar de recibir mensajes"
+    }
+  }
+}
+4) HEADER (TEXT) + BODY + FOOTER con variables en ambos
+
+{
+  "name": "header_body_footer_text",
+  "channel_type": "WHATSAPP",
+  "meta_template_name": "header_body_footer_text",
+  "category": "MARKETING",
+  "components": {
+    "header": {
+      "format": "TEXT",
+      "text": "Oferta por tiempo limitado: {fecha_fin}",
+      "example": {
+        "header_text": [
+          ["31 de Agosto"]
+        ]
+      }
+    },
+    "body": {
+      "text": "Hola {nombre}, usa el código {codigo} y ahorra {porcentaje}.",
+      "example": {
+        "body_text": [
+          ["Lucía", "AHORRA25", "25%"]
+        ]
+      }
+    },
+    "footer": {
+      "text": "Aplica términos y condiciones"
+    }
+  }
+}
+ • IMAGE con generación automática del handle (desde GCS):
+{
+  "name": "header_image_body",
+  "channel_type": "WHATSAPP",
+  "meta_template_name": "header_image_body",
+  "category": "MARKETING",
+  "components": {
+    "header": {
+      "format": "IMAGE",
+      "gcs_object_name": "whatsapp/123/media/abc123.jpg"
+    },
+    "body": {
+      "text": "Hola {nombre}, mira la imagen de nuestra nueva colección.",
+      "example": { "body_text": [["Marcos"]] }
+    }
+  }
+}
+
+  • DOCUMENT/PDF con generación automática del handle:
+
+{
+  "name": "header_pdf_body_buttons",
+  "channel_type": "WHATSAPP",
+  "meta_template_name": "header_pdf_body_buttons",
+  "category": "UTILITY",
+  "components": {
+    "header": {
+      "format": "DOCUMENT",
+      "gcs_object_name": "whatsapp/123/media/recibo_2025.pdf",
+      "file_name": "recibo_2025.pdf",
+      "mime_type": "application/pdf"
+    },
+    "body": {
+      "text": "Hola {nombre}, tu comprobante está en el documento adjunto.",
+      "example": { "body_text": [["Paula"]] }
+    },
+    "buttons": [
+      { "type": "URL", "text": "Soporte", "url": "https://www.example.com/support" },
+      { "type": "PHONE_NUMBER", "text": "Llamar", "phone_number": "15550051310" }
+    ]
+  }
+}
+
+  • VIDEO con generación automática del handle:
+
+
+{
+  "name": "header_video_url_var",
+  "channel_type": "WHATSAPP",
+  "meta_template_name": "header_video_url_var",
+  "category": "MARKETING",
+  "components": {
+    "header": {
+      "format": "VIDEO",
+      "gcs_object_name": "whatsapp/123/media/campania.mp4",
+      "file_name": "campania.mp4",
+      "mime_type": "video/mp4"
+    },
+    "body": {
+      "text": "Hola {nombre}, mira el video de la campaña de {temporada}.",
+      "example": { "body_text": [["Diana", "verano"]] }
+    },
+    "buttons": [
+      { "type": "URL", "text": "Ver promo", "url": "https://www.example.com/promo?code={{1}}", "example": ["SUMMER2025"] }
+    ]
+  }
+}
+
+8) BODY + botones QUICK_REPLY (interactiva simple)
+{
+  "name": "body_quick_replies",
+  "channel_type": "WHATSAPP",
+  "meta_template_name": "body_quick_replies",
+  "category": "MARKETING",
+  "components": {
+    "body": {
+      "text": "¿Deseas recibir más promociones?"
+    },
+    "buttons": [
+      {
+        "type": "QUICK_REPLY",
+        "text": "Sí, quiero"
+      },
+      {
+        "type": "QUICK_REPLY",
+        "text": "No, gracias"
+      }
+    ]
+  }
+}
+
+9) Completa: HEADER (TEXT) + BODY + FOOTER + botones (QUICK_REPLY, URL con variable, PHONE_NUMBER)
+
+
+{
+  "name": "full_interactive_template",
+  "channel_type": "WHATSAPP",
+  "meta_template_name": "full_interactive_template_2",
+  "category": "MARKETING",
+  "components": {
+    "header": {
+      "format": "TEXT",
+      "text": "¡Hola {nombre_deudor}!",
+      "example": {
+        "header_text": [
+          ["Carlos"]
+        ]
+      }
+    },
+    "body": {
+      "text": "Aprovecha {porcentaje_ltv} de descuento usando el código {sistema_origen} antes de {fecha_importacion}. No te pierdas esta gran oportunidad",
+      "example": {
+        "body_text": [
+          ["20%", "RENOVA20", "30/09/2025"]
+        ]
+      }
+    },
+    "footer": {
+      "text": "Gestiona preferencias con los botones"
+    },
+    "buttons": [
+      {
+        "type": "QUICK_REPLY",
+        "text": "Quiero suscribirme"
+      },
+      {
+        "type": "URL",
+        "text": "Comprar ahora",
+        "url": "https://www.example.com/shop?promo={{1}}",
+        "example": ["RENOVA20"]
+      },
+      {
+        "type": "PHONE_NUMBER",
+        "text": "Llamar soporte",
+        "phone_number": "573059117385"
+      }
+    ]
+  }
+}
