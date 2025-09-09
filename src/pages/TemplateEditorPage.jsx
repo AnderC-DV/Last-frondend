@@ -133,9 +133,11 @@ const TemplateEditorPage = () => {
 
   if (loading) return <div className="p-8">Cargando editor...</div>;
 
+  const containerClass = template.channel_type === 'WHATSAPP' ? 'max-w-7xl' : 'max-w-4xl';
+
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
-      <div className="max-w-4xl mx-auto">
+      <div className={`${containerClass} mx-auto`}>
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">{id ? 'Editar Plantilla (Guardar como Nueva)' : 'Crear Nueva Plantilla'}</h1>
