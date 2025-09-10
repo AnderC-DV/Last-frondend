@@ -54,7 +54,7 @@ const TemplateActionMenu = ({ template, onPreview, onApprove, onReject, previewO
       </button>
 
   {/* Botones de Aprobar/Rechazar (condicionales) */}
-  {canApproveOrReject() && !previewOnly && (
+  {canApproveOrReject() && !previewOnly && typeof onApprove === 'function' && typeof onReject === 'function' && (
         <>
           <button
             onClick={handleApproveClick}

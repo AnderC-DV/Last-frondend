@@ -5,17 +5,48 @@ const WhatsAppPreview = ({ components }) => {
     return <div className="text-gray-500 text-center p-4">No hay componentes para previsualizar.</div>;
   }
 
+  const resolveMediaUrl = (header) => {
+    // Preferimos URLs directas si existen; localPreviewUrl es usado durante creación
+    return header?.localPreviewUrl || header?.url || header?.public_url || null;
+  };
+
   const renderHeader = (header) => {
     if (!header) return null;
+    const mediaUrl = resolveMediaUrl(header);
     switch (header.format) {
       case 'TEXT':
         return <div className="bg-blue-500 text-white p-3 text-sm font-semibold rounded-t-lg">{header.text}</div>;
       case 'IMAGE':
-        return <div className="bg-gray-100 p-6 rounded-t-lg text-center text-gray-600 text-sm border-b border-gray-200">🖼️ Imagen adjunta</div>;
+        return (
+          <div className="border-b border-gray-200">
+            {mediaUrl ? (
+              <img src={mediaUrl} alt={header.file_name || 'Imagen'} className="w-full h-auto max-h-64 object-contain bg-black/5" />
+            ) : (
+              <div className="bg-gray-100 p-6 rounded-t-lg text-center text-gray-600 text-sm">🖼️ Imagen adjunta</div>
+            )}
+          </div>
+        );
       case 'VIDEO':
-        return <div className="bg-gray-100 p-6 rounded-t-lg text-center text-gray-600 text-sm border-b border-gray-200">🎥 Video adjunto</div>;
+        return (
+          <div className="border-b border-gray-200">
+            {mediaUrl ? (
+              <video src={mediaUrl} controls className="w-full h-auto max-h-64 bg-black" />
+            ) : (
+              <div className="bg-gray-100 p-6 rounded-t-lg text-center text-gray-600 text-sm">🎥 Video adjunto</div>
+            )}
+          </div>
+        );
       case 'DOCUMENT':
-        return <div className="bg-gray-100 p-6 rounded-t-lg text-center text-gray-600 text-sm border-b border-gray-200">📄 Documento adjunto</div>;
+        return (
+          <div className="bg-gray-100 p-4 rounded-t-lg text-center text-gray-700 text-sm border-b border-gray-200">
+            📄 {header.file_name || 'Documento'}
+            {mediaUrl && (
+              <div className="mt-2">
+                <a href={mediaUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Abrir documento</a>
+              </div>
+            )}
+          </div>
+        );
       default:
         return null;
     }
@@ -23,7 +54,7 @@ const WhatsAppPreview = ({ components }) => {
 
   const renderBody = (body) => {
     if (!body || !body.text) return null;
-    const previewText = body.text.replace(/\{(\w+)\}/g, '<span class="font-bold text-blue-700">{{\$$1}}</span>');
+    const previewText = body.text.replace(/\{(\w+)\}/g, '<span class="font-bold text-blue-700">{{$$$1}}</span>');
     return <div className="p-3 text-gray-800 text-sm leading-snug" dangerouslySetInnerHTML={{ __html: previewText }}></div>;
   };
 
@@ -65,7 +96,7 @@ const WhatsAppPreview = ({ components }) => {
       </div>
       <p className="text-xs text-gray-400 mt-4 text-center">
         Esta es una representación visual aproximada de cómo se verá el mensaje en WhatsApp.
-        Los medios (imágenes, videos, documentos) se muestran como placeholders.
+        Los medios se muestran cuando hay una URL disponible (local o pública); de lo contrario, se visualiza un placeholder.
       </p>
     </div>
   );

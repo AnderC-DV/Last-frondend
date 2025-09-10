@@ -20,8 +20,16 @@ const WhatsAppPreview = ({ template }) => {
             {/* Header Preview */}
             {header && (
               <div className="mb-2">
-                {header.format === 'IMAGE' && <div className="h-32 bg-gray-300 rounded-md flex items-center justify-center text-gray-500">Imagen</div>}
-                {header.format === 'VIDEO' && <div className="h-32 bg-gray-300 rounded-md flex items-center justify-center text-gray-500">Video</div>}
+                {header.format === 'IMAGE' && (
+                  header.localPreviewUrl ?
+                  <img src={header.localPreviewUrl} alt="Preview" className="rounded-md w-full h-auto" /> :
+                  <div className="h-32 bg-gray-300 rounded-md flex items-center justify-center text-gray-500">Imagen</div>
+                )}
+                {header.format === 'VIDEO' && (
+                  header.localPreviewUrl ?
+                  <video src={header.localPreviewUrl} controls className="rounded-md w-full h-auto" /> :
+                  <div className="h-32 bg-gray-300 rounded-md flex items-center justify-center text-gray-500">Video</div>
+                )}
                 {header.format === 'DOCUMENT' && <div className="p-2 bg-gray-100 rounded-md text-sm text-gray-700">📄 {header.file_name || 'Documento'}</div>}
                 {header.format === 'TEXT' && <p className="font-bold" dangerouslySetInnerHTML={{ __html: renderTextWithVariables(header.text) }}></p>}
               </div>

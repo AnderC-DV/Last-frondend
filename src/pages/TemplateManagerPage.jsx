@@ -188,6 +188,7 @@ const TemplateManagerPage = () => {
       templates={filteredTemplates} 
       onTemplateUpdated={fetchTemplates} 
       statusFilter={activeStatus === 'REJECTED' ? 'REJECTED_INTERNAL' : activeStatus} 
+      isApprovalView={false}
     />
     </div>
 

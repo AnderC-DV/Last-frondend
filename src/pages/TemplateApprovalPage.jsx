@@ -78,6 +78,7 @@ const TemplateApprovalPage = () => {
           templates={getFilteredTemplates()} 
           onTemplateUpdated={fetchTemplates}
           statusFilter={statusFilter}
+          isApprovalView={true}
         />
       )}
     </div>

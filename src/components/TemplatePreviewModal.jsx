@@ -1,5 +1,6 @@
 import React from 'react';
 import EmailPreview from './wizards/EmailPreview';
+import WhatsAppPreview from './WhatsAppPreview';
 
 // Función para traducir los motivos de rechazo de Meta (copiada de TemplateList.jsx)
 const getTranslatedRejectionReason = (reason) => {
@@ -16,6 +17,27 @@ const getTranslatedRejectionReason = (reason) => {
 
 const TemplatePreviewModal = ({ template, onClose }) => {
   const isRejected = template.status === 'REJECTED_INTERNAL' || template.status === 'REJECTED_META';
+
+  // Normaliza los componentes de WhatsApp desde la plantilla, soportando diferentes formas de almacenamiento
+  const getWhatsAppComponents = (tpl) => {
+    if (!tpl) return {};
+    if (tpl.components && typeof tpl.components === 'object') {
+      return tpl.components;
+    }
+    const content = tpl.content;
+    if (typeof content === 'string') {
+      try {
+        const parsed = JSON.parse(content);
+        if (parsed && typeof parsed === 'object') {
+          return parsed.components || parsed;
+        }
+      } catch (e) {
+        // Si no es JSON, tratamos el contenido como body.text plano
+        return { body: { text: content } };
+      }
+    }
+    return {};
+  };
 
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex justify-center items-center z-50 p-4">
@@ -38,16 +60,20 @@ const TemplatePreviewModal = ({ template, onClose }) => {
           )}
           <div className="mb-4">
             <strong>Contenido:</strong>
-            {template.channel_type === 'EMAIL' ? (
+            {template.channel_type === 'EMAIL' && (
               <EmailPreview subject={template.subject} htmlContent={template.content} />
-            ) : (
+            )}
+            {template.channel_type === 'WHATSAPP' && (
+              <WhatsAppPreview components={getWhatsAppComponents(template)} />
+            )}
+            {template.channel_type !== 'EMAIL' && template.channel_type !== 'WHATSAPP' && (
               <div className="border p-4 mt-2 rounded bg-gray-50 whitespace-pre-wrap">
                 {template.content}
               </div>
             )}
           </div>
           <div className="mb-4">
-            <strong>Creado por:</strong> {template.creator.full_name} ({template.creator.email})
+            <strong>Creado por:</strong> {template.creator?.full_name || 'Usuario desconocido'} {template.creator?.email ? `(${template.creator.email})` : ''}
           </div>
 
           {isRejected && (

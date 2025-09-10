@@ -68,7 +68,8 @@ const HeaderEditor = ({ template, setTemplate }) => {
       }
 
       // Paso 3: Actualizar estado de la plantilla
-      const newHeader = { ...header, gcs_object_name };
+      const previewUrl = URL.createObjectURL(file);
+      const newHeader = { ...header, gcs_object_name, localPreviewUrl: previewUrl };
       if (header.format === 'DOCUMENT' || header.format === 'VIDEO') {
         newHeader.file_name = file.name;
         newHeader.mime_type = file.type;
@@ -140,11 +141,6 @@ const HeaderEditor = ({ template, setTemplate }) => {
               Error: {error}
             </p>
           )}
-           {header.gcs_object_name && (
-             <p className="text-xs text-gray-500 mt-1 truncate">
-               Objeto GCS: {header.gcs_object_name}
-             </p>
-           )}
         </div>
       )}
     </div>
