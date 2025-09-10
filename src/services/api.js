@@ -152,6 +152,7 @@ export const createSimpleFilter = (filterData) => apiRequest('/audience/filters/
 export const getCampaignStats = () => apiRequest('/campaigns/stats');
 export const refreshCampaignStats = () => apiRequest('/campaigns/stats/refresh', 'POST');
 export const createAndLaunchCampaign = (campaignData) => apiRequest('/campaigns/', 'POST', campaignData);
+export const getAllCampaigns = () => apiRequest('/campaigns/');
 
 // Preview de campaña en CSV (respuesta como Blob)
 export const getCampaignPreviewCSV = async (payload) => {

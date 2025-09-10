@@ -29,10 +29,14 @@ const MenuPortal = ({ children, coords }) => {
 };
 
 
-const CampaignActionMenu = ({ campaign }) => {
+const CampaignActionMenu = ({ campaign, onViewReport }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState({});
   const buttonRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const normalizedStatus = (campaign?.status || '').toString();
+  const isScheduled = normalizedStatus.toUpperCase() === 'SCHEDULED' || normalizedStatus.toLowerCase().includes('programada');
 
   const handleDuplicate = () => {
     console.log(`Duplicando campaña: ${campaign.name}`);
@@ -40,6 +44,12 @@ const CampaignActionMenu = ({ campaign }) => {
   };
 
   const handleDelete = () => {
+    // Solo permitir eliminar si la campaña está programada (SCHEDULED)
+    if (!isScheduled) {
+      // Protección extra; el botón estará deshabilitado, pero evitamos acciones por si acaso
+      console.warn('Eliminar no permitido: la campaña no está en estado SCHEDULED.');
+      return;
+    }
     // Aquí normalmente mostrarías un modal de confirmación
     // y luego despacharías una acción para eliminar la campaña.
     console.log(`Eliminando campaña: ${campaign.name}`);
@@ -47,8 +57,15 @@ const CampaignActionMenu = ({ campaign }) => {
   };
 
   const handleViewReport = () => {
-    console.log(`Viendo reporte de: ${campaign.name}`);
-    setIsOpen(false);
+    try {
+      if (typeof onViewReport === 'function') {
+        onViewReport(campaign);
+      } else {
+        console.log(`Viendo reporte de: ${campaign.name}`);
+      }
+    } finally {
+      setIsOpen(false);
+    }
   };
 
   const toggleMenu = () => {
@@ -65,10 +82,15 @@ const CampaignActionMenu = ({ campaign }) => {
   // Cierra el menú si se hace clic fuera
   useEffect(() => {
     const handleClickOutside = (event) => {
-        if (isOpen && buttonRef.current && !buttonRef.current.contains(event.target)) {
-            // Se necesita un chequeo más robusto para el portal, pero por ahora cerramos si no es el botón
-            setIsOpen(false);
-        }
+      if (
+        isOpen &&
+        buttonRef.current &&
+        !buttonRef.current.contains(event.target) &&
+        menuRef.current &&
+        !menuRef.current.contains(event.target)
+      ) {
+        setIsOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
@@ -88,7 +110,7 @@ const CampaignActionMenu = ({ campaign }) => {
 
       {isOpen && (
         <MenuPortal coords={coords}>
-            <div className="w-56 bg-white rounded-md shadow-lg z-50 border">
+            <div ref={menuRef} className="w-56 bg-white rounded-md shadow-lg z-50 border">
                 <ul className="py-1">
                 <li>
                     <button
@@ -111,11 +133,17 @@ const CampaignActionMenu = ({ campaign }) => {
                 <hr className="my-1 border-gray-100" />
                 <li>
                     <button
-                    onClick={handleDelete}
-                    className="w-full text-left flex items-center px-4 py-2 text-sm text-red-700 hover:bg-red-50"
+                      onClick={handleDelete}
+                      disabled={!isScheduled}
+                      className={`w-full text-left flex items-center px-4 py-2 text-sm rounded-md 
+                        ${isScheduled 
+                          ? 'text-red-700 hover:bg-red-50' 
+                          : 'text-gray-400 cursor-not-allowed'}
+                      `}
+                      title={isScheduled ? 'Eliminar Campaña' : 'Sólo se puede eliminar cuando la campaña está Programada (SCHEDULED)'}
                     >
-                    <DeleteIcon />
-                    Eliminar Campaña
+                      <DeleteIcon />
+                      Eliminar Campaña
                     </button>
                 </li>
                 </ul>

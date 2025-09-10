@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import CampaignActionMenu from "./CampaignActionMenu";
+import CampaignReportDrawer from "./CampaignReportDrawer";
 import { getCampaignStats, refreshCampaignStats } from "../services/api";
 import { toast } from "sonner";
 
@@ -36,6 +37,8 @@ export default function CampaignsTable({ channelFilter }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [selectedCampaign, setSelectedCampaign] = useState(null);
 
   const fetchCampaignStats = useCallback(async () => {
     try {
@@ -90,106 +93,116 @@ export default function CampaignsTable({ channelFilter }) {
   }
 
   return (
-    <div>
-      <div className="p-6 bg-white rounded-t-xl flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold text-gray-800">Historial de Campañas</h2>
-          <p className="text-sm text-gray-500 mt-1">Todas las campañas creadas y su estado actual.</p>
-        </div>
-        <button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="px-4 py-2 text-sm font-medium text-white rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
-          style={{ backgroundColor: '#1e2939', ...( !isRefreshing ? { } : {} ) }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1e2939ff'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#243043ff'}
-        >
-          {isRefreshing ? "Actualizando..." : "Actualizar Tabla"}
-        </button>
-      </div>
-      <div className="overflow-x-auto bg-white rounded-b-xl shadow-lg">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nombre de Campaña
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Estado
-              </th>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Enviados
-              </th>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Entregados
-              </th>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Leídos
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Última Actualización
-              </th>
-              <th scope="col" className="relative px-6 py-3">
-                <span className="sr-only">Acciones</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {paginatedCampaigns.map((c) => {
-              const channelInfo = getChannelInfo(c.channel_type);
-              const statusColor = getStatusColor(c.status);
-              const formattedDate = c.updated_at ? new Date(c.updated_at).toLocaleString() : 'N/A';
-
-              return (
-                <tr key={c.id} className="hover:bg-gray-50 transition-colors duration-150">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-gray-100">
-                        <span className="text-xl">{channelInfo.icon}</span>
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{c.name}</div>
-                        <div className="text-sm text-gray-500">{channelInfo.name}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColor}`}>{c.status}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600">{c.enviados || 0}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600">{c.entregados || 0}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600">{c.leidos || 0}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formattedDate}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
-                    <CampaignActionMenu campaign={c} />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        <div className="p-4 flex items-center justify-between">
+    <>
+      <div>
+        <div className="p-6 bg-white rounded-t-xl flex justify-between items-center">
           <div>
-            <span className="text-sm text-gray-700">
-              Mostrando <span className="font-medium">{(currentPage - 1) * rowsPerPage + 1}</span> a <span className="font-medium">{Math.min(currentPage * rowsPerPage, filteredCampaigns.length)}</span> de <span className="font-medium">{filteredCampaigns.length}</span> resultados
-            </span>
+            <p className="text-sm text-gray-500 mt-1">Todas las campañas creadas y su estado actual.</p>
           </div>
-          <div className="flex items-center space-x-2">
-            <select value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="p-1 border rounded-md">
-              {[10, 25, 50].map(size => (
-                <option key={size} value={size}>Mostrar {size}</option>
-              ))}
-            </select>
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 border rounded-md disabled:opacity-50">
-              Anterior
-            </button>
-            <span className="text-sm">{currentPage} de {totalPages}</span>
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1 border rounded-md disabled:opacity-50">
-              Siguiente
-            </button>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="px-4 py-2 text-sm font-medium text-white rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
+            style={{ backgroundColor: '#1e2939', ...( !isRefreshing ? { } : {} ) }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1e2939ff'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#243043ff'}
+          >
+            {isRefreshing ? "Actualizando..." : "Actualizar Tabla"}
+          </button>
+        </div>
+
+        <div className="overflow-x-auto bg-white rounded-b-xl shadow-lg">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Nombre de Campaña
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Estado
+                </th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Enviados
+                </th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Entregados
+                </th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Leídos
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Última Actualización
+                </th>
+                <th scope="col" className="relative px-6 py-3">
+                  <span className="sr-only">Acciones</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {paginatedCampaigns.map((c) => {
+                const channelInfo = getChannelInfo(c.channel_type);
+                const statusColor = getStatusColor(c.status);
+                const formattedDate = c.updated_at ? new Date(c.updated_at).toLocaleString() : 'N/A';
+
+                return (
+                  <tr key={c.id} className="hover:bg-gray-50 transition-colors duration-150">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-gray-100">
+                          <span className="text-xl">{channelInfo.icon}</span>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{c.name}</div>
+                          <div className="text-sm text-gray-500">{channelInfo.name}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColor}`}>{c.status}</span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600">{c.enviados || 0}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600">{c.entregados || 0}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600">{c.leidos || 0}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formattedDate}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
+                      <CampaignActionMenu 
+                        campaign={c} 
+                        onViewReport={(camp) => { setSelectedCampaign(camp); setReportOpen(true); }}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="p-4 flex items-center justify-between">
+            <div>
+              <span className="text-sm text-gray-700">
+                Mostrando <span className="font-medium">{(currentPage - 1) * rowsPerPage + 1}</span> a <span className="font-medium">{Math.min(currentPage * rowsPerPage, filteredCampaigns.length)}</span> de <span className="font-medium">{filteredCampaigns.length}</span> resultados
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <select value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="p-1 border rounded-md">
+                {[10, 25, 50].map(size => (
+                  <option key={size} value={size}>Mostrar {size}</option>
+                ))}
+              </select>
+              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 border rounded-md disabled:opacity-50">
+                Anterior
+              </button>
+              <span className="text-sm">{currentPage} de {totalPages}</span>
+              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1 border rounded-md disabled:opacity-50">
+                Siguiente
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+      <CampaignReportDrawer 
+        open={reportOpen} 
+        onClose={() => { setReportOpen(false); setSelectedCampaign(null); }} 
+        campaign={selectedCampaign}
+      />
+    </>
   );
 }
