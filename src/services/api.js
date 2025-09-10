@@ -221,6 +221,10 @@ export const reviewTemplate = (templateId, reviewData) => apiRequest(`/templates
 // --- Endpoints de Contactos ---
 export const uploadContactsCSV = (file) => apiRequestWithFile('/staff-contacts/bulk', 'POST', file);
 
+// --- Endpoints de WhatsApp Media ---
+export const getSignedUploadUrl = (conversation_id, mime_type, original_filename) => 
+  apiRequest('/whatsapp/media/generate_signed_upload_url', 'POST', { conversation_id, mime_type, original_filename });
+
 // --- Endpoints de Conversaciones ---
 export const getConversations = () => apiRequest('/conversations/');
 export const sendMessage = (conversationId, messageData) => apiRequest(`/conversations/${conversationId}/reply`, 'POST', messageData);

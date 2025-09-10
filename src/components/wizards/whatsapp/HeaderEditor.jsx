@@ -1,7 +1,12 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
+import { getSignedUploadUrl } from '../../../services/api';
 
 const HeaderEditor = ({ template, setTemplate }) => {
   const header = template.components?.header || { format: 'NONE' };
+  const [uploadStatus, setUploadStatus] = useState('idle'); // idle, uploading, success, error
+  const [error, setError] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   const setHeader = (newHeader) => {
     setTemplate(prev => ({
@@ -15,14 +20,71 @@ const HeaderEditor = ({ template, setTemplate }) => {
 
   const handleFormatChange = (e) => {
     const format = e.target.value;
+    setUploadStatus('idle');
+    setSelectedFile(null);
+    setError(null);
     if (format === 'NONE') {
-      // Create a copy of components and delete header from it
       const newComponents = { ...template.components };
       delete newComponents.header;
       setTemplate(prev => ({ ...prev, components: newComponents }));
     } else {
       setHeader({ format });
     }
+  };
+
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setSelectedFile(file);
+      handleUpload(file);
+    }
+  };
+
+  const handleUpload = async (file) => {
+    if (!file) return;
+
+    setUploadStatus('uploading');
+    setError(null);
+
+    try {
+      // Paso 1: Obtener URL firmada
+      const signedUrlResponse = await getSignedUploadUrl(
+        9999, // conversation_id is fixed for template creation
+        file.type,
+        file.name
+      );
+
+      const { signed_url, gcs_object_name, content_type } = signedUrlResponse;
+
+      // Paso 2: Subir archivo a GCS
+      const uploadResponse = await fetch(signed_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': content_type },
+        body: file,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Error al subir el archivo a GCS.');
+      }
+
+      // Paso 3: Actualizar estado de la plantilla
+      const newHeader = { ...header, gcs_object_name };
+      if (header.format === 'DOCUMENT' || header.format === 'VIDEO') {
+        newHeader.file_name = file.name;
+        newHeader.mime_type = file.type;
+      }
+      setHeader(newHeader);
+      setUploadStatus('success');
+
+    } catch (err) {
+      console.error("Error en el proceso de subida:", err);
+      setError(err.message || "Ocurrió un error desconocido.");
+      setUploadStatus('error');
+    }
+  };
+
+  const triggerFileSelect = () => {
+    fileInputRef.current.click();
   };
 
   return (
@@ -52,34 +114,37 @@ const HeaderEditor = ({ template, setTemplate }) => {
       )}
       {['IMAGE', 'DOCUMENT', 'VIDEO'].includes(header.format) && (
         <div className="mt-2">
-          <p className="text-xs text-gray-600 mb-2">
-            El medio debe ser subido a un bucket de GCS. Proporciona el nombre del objeto.
-          </p>
           <input
-            type="text"
-            className="w-full p-2 border rounded-md mb-2"
-            placeholder="Nombre del objeto GCS"
-            value={header.gcs_object_name || ''}
-            onChange={(e) => setHeader({ ...header, gcs_object_name: e.target.value })}
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept={header.format === 'IMAGE' ? 'image/*' : (header.format === 'VIDEO' ? 'video/*' : '.pdf')}
           />
-          {(header.format === 'DOCUMENT' || header.format === 'VIDEO') && (
-            <>
-              <input
-                type="text"
-                className="w-full p-2 border rounded-md mb-2"
-                placeholder="Nombre del archivo (ej: recibo.pdf)"
-                value={header.file_name || ''}
-                onChange={(e) => setHeader({ ...header, file_name: e.target.value })}
-              />
-              <input
-                type="text"
-                className="w-full p-2 border rounded-md"
-                placeholder="Tipo MIME (ej: application/pdf)"
-                value={header.mime_type || ''}
-                onChange={(e) => setHeader({ ...header, mime_type: e.target.value })}
-              />
-            </>
+          <button
+            type="button"
+            onClick={triggerFileSelect}
+            disabled={uploadStatus === 'uploading'}
+            className="w-full p-2 border rounded-md bg-gray-100 hover:bg-gray-200 disabled:bg-gray-300"
+          >
+            {uploadStatus === 'uploading' ? 'Subiendo...' : 'Seleccionar Archivo'}
+          </button>
+          
+          {uploadStatus === 'success' && (
+            <p className="text-green-600 text-xs mt-1">
+              Archivo subido: {selectedFile.name}
+            </p>
           )}
+          {uploadStatus === 'error' && (
+            <p className="text-red-600 text-xs mt-1">
+              Error: {error}
+            </p>
+          )}
+           {header.gcs_object_name && (
+             <p className="text-xs text-gray-500 mt-1 truncate">
+               Objeto GCS: {header.gcs_object_name}
+             </p>
+           )}
         </div>
       )}
     </div>
