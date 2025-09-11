@@ -243,7 +243,7 @@ const TemplateList = ({ templates = [], onTemplateUpdated, statusFilter, isAppro
       </div>
       {isReviewModalOpen && selectedTemplate && (
         <TemplateReviewModal
-          templateId={selectedTemplate.id}
+          template={selectedTemplate}
           onClose={() => setIsReviewModalOpen(false)}
           onConfirm={handleReject}
         />
@@ -256,10 +256,18 @@ const TemplateList = ({ templates = [], onTemplateUpdated, statusFilter, isAppro
       )}
       {/* Overlay de carga mientras se procesan acciones */}
       {isLoading && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded-lg shadow-lg">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-2 text-center text-gray-700">Procesando...</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/10 backdrop-blur-md backdrop-saturate-150">
+          <div className="relative flex flex-col items-center gap-4 px-8 py-6 rounded-2xl border border-white/40 bg-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.2)] ring-1 ring-white/30">
+            <div className="relative h-14 w-14">
+              <div className="absolute inset-0 rounded-full border-4 border-white/30"></div>
+              <div className="animate-spin rounded-full h-14 w-14 bg-gradient-to-tr from-blue-500 via-cyan-400 to-indigo-500 p-[3px]">
+                <div className="h-full w-full rounded-full bg-white/60 backdrop-blur-sm"></div>
+              </div>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-gray-800 tracking-wide drop-shadow">Procesando...</p>
+              <p className="text-[11px] mt-1 text-gray-600/80">Aplicando acción, por favor espera</p>
+            </div>
           </div>
         </div>
       )}

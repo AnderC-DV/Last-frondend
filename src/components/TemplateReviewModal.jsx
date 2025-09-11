@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
 import EmailPreview from './wizards/EmailPreview';
+import WhatsAppPreview from './WhatsAppPreview';
 
-const TemplateReviewModal = ({ template, onClose, onReview }) => {
+const TemplateReviewModal = ({ template, onClose, onConfirm }) => {
   const [rejectionReason, setRejectionReason] = useState('');
   const [isApproving, setIsApproving] = useState(true);
 
   const handleReview = () => {
     if (isApproving) {
-      onReview(template.id, true);
+      onConfirm(template.id, true);
     } else {
       if (!rejectionReason || rejectionReason.trim().length < 10) {
         alert('Por favor, proporciona una razón para el rechazo con al menos 10 caracteres.');
         return;
       }
-      onReview(template.id, false, rejectionReason);
+      onConfirm(template.id, rejectionReason);
     }
   };
 
@@ -42,6 +43,13 @@ const TemplateReviewModal = ({ template, onClose, onReview }) => {
             <strong>Contenido:</strong>
             {template.channel_type === 'EMAIL' ? (
               <EmailPreview subject={template.subject} htmlContent={template.content} />
+            ) : template.channel_type === 'WHATSAPP' ? (
+              <WhatsAppPreview
+                templateName={template.name}
+                category={template.category}
+                components={template.components}
+                example={template.example}
+              />
             ) : (
               <div className="border p-4 mt-2 rounded bg-gray-50 whitespace-pre-wrap">
                 {template.content}
