@@ -143,7 +143,7 @@ const NotificationProvider = ({ children }) => {
     fetchNotifications();
 
     return () => {
-      clearTimeout(connectTimeout); // Clear timeout if component unmounts before connection
+      // Nota: se eliminó clearTimeout(connectTimeout) porque la variable nunca se define y generaba ReferenceError
       console.debug('[NotificationContext] Cleaning up socket...');
       socketRef.current?.close();
     };

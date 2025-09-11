@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import loginBgImage from '../assets/LogoAT.png';
@@ -14,6 +14,15 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [userInfo, setUserInfo] = useState(null);
+  const [logoutReason, setLogoutReason] = useState('');
+
+  useEffect(() => {
+    const reason = sessionStorage.getItem('logoutReason');
+    if (reason) {
+      setLogoutReason(reason);
+      sessionStorage.removeItem('logoutReason');
+    }
+  }, []);
 
   const handleIdentifierSubmit = async (e) => {
     e.preventDefault();
@@ -89,6 +98,16 @@ const LoginPage = () => {
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Bienvenido a AuraTech</h1>
             <p className="text-gray-600">El corazon de Renovar Financiera</p>
           </div>
+          {logoutReason === 'inactivity' && (
+            <div className="mb-4 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs text-center">
+              Tu sesión se cerró por inactividad. Ingresa de nuevo para continuar.
+            </div>
+          )}
+          {logoutReason === 'manual' && (
+            <div className="mb-4 p-3 rounded-md bg-gray-50 border border-gray-200 text-gray-600 text-xs text-center">
+              Has cerrado sesión correctamente.
+            </div>
+          )}
           {step === "identifier" && (
             <form onSubmit={handleIdentifierSubmit} className="w-full">
               <h2 className="text-lg font-semibold mb-4 text-center text-gray-700">Inicia Sesión</h2>

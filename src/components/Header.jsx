@@ -25,8 +25,8 @@ const Header = ({ onOpenChangePassword }) => {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
-    window.location.reload();
+    sessionStorage.setItem('logoutReason', 'manual');
+    navigate('/login', { replace: true });
   };
 
   useEffect(() => {

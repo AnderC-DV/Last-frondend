@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { jwtDecode } from "jwt-decode";
+import { toast } from 'sonner';
 import { checkUserIdentifier, loginWithPassword, firstTimeLogin } from '../services/api';
 
 const AuthContext = createContext(null);
@@ -48,26 +49,33 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    // Solo activar el control de inactividad si el usuario está autenticado
+    if (!user) return;
+
+    const INACTIVITY_TIMEOUT_MS = Number(import.meta.env?.VITE_INACTIVITY_TIMEOUT_MS) || 15 * 60 * 1000; // default 15 min
     let activityTimer;
+
+    const handleExpire = () => {
+      try {
+        sessionStorage.setItem('logoutReason', 'inactivity');
+        toast.info('Sesión cerrada por inactividad', { description: 'Vuelve a iniciar sesión para continuar.' });
+      } catch {}
+      logout();
+    };
 
     const resetTimer = () => {
       clearTimeout(activityTimer);
-      activityTimer = setTimeout(() => {
-        logout();
-      }, 15 * 60 * 1000); // 15 minutes
+      activityTimer = setTimeout(handleExpire, INACTIVITY_TIMEOUT_MS);
     };
 
-    const handleActivity = () => {
-      resetTimer();
-    };
+    const handleActivity = () => resetTimer();
 
-    // Event listeners for user activity
     window.addEventListener('mousemove', handleActivity);
     window.addEventListener('keydown', handleActivity);
     window.addEventListener('scroll', handleActivity);
     window.addEventListener('click', handleActivity);
 
-    resetTimer(); // Initial timer setup
+    resetTimer();
 
     return () => {
       clearTimeout(activityTimer);
