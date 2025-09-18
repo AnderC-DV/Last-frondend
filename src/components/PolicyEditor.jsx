@@ -14,7 +14,7 @@ const PolicyEditor = ({ onInsert }) => {
   const handleInsertPolicy = () => {
     let termValue;
     if (selectedTerm === 'Contado') {
-      termValue = '1';
+      termValue = '0';
     } else if (selectedTerm === '>36 meses') {
       termValue = '37';
     } else {

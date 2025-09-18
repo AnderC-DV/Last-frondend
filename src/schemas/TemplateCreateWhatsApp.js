@@ -17,8 +17,9 @@ class TemplateCreateWhatsApp {
    * @param {WhatsAppBody} [components.body] - Optional body component.
    * @param {WhatsAppFooter} [components.footer] - Optional footer component.
    * @param {Array<WhatsAppButton>} [components.buttons] - Optional array of button components.
+   * @param {string|null} [special_variable_name=null] - Optional name for special variable (alphanumeric + underscores, max 50 chars).
    */
-  constructor(name, meta_template_name, category, components) {
+  constructor(name, meta_template_name, category, components, special_variable_name = null) {
     if (name.length < 3 || name.length > 100) {
       throw new Error("Template name must be between 3 and 100 characters.");
     }
@@ -28,12 +29,18 @@ class TemplateCreateWhatsApp {
     if (!["AUTHENTICATION", "MARKETING", "UTILITY"].includes(category)) {
       throw new Error("Invalid template category.");
     }
+    if (special_variable_name && (special_variable_name.length > 50 || !/^[a-zA-Z0-9_]+$/.test(special_variable_name))) {
+      throw new Error("Special variable name must be alphanumeric with underscores only and max 50 characters.");
+    }
 
     this.name = name;
     this.channel_type = 'WHATSAPP';
     this.meta_template_name = meta_template_name;
     this.category = category;
     this.components = components;
+    if (special_variable_name) {
+      this.special_variable_name = special_variable_name;
+    }
 
     this.validateAndBuildComponents(components);
   }

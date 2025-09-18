@@ -16,6 +16,7 @@ class CampaignScheduleCreate {
    * @param {string|null} [data.start_date] - Optional start date in ISO format.
    * @param {string|null} [data.end_date] - Optional end date in ISO format.
    * @param {string|null} [data.codebtor_strategy] - Co-debtor strategy if applicable.
+   * @param {string|null} [data.special_variable_value] - Optional value for special variable.
    */
   constructor({
     name,
@@ -29,6 +30,7 @@ class CampaignScheduleCreate {
     start_date = null,
     end_date = null,
     codebtor_strategy = null,
+    special_variable_value = null,
   }) {
     if (!name || name.length < 5 || name.length > 150) {
       throw new Error("Schedule name must be between 5 and 150 characters.");
@@ -60,6 +62,7 @@ class CampaignScheduleCreate {
     if (description) this.description = description;
     if (start_date) this.start_date = start_date;
     if (end_date) this.end_date = end_date;
+    if (special_variable_value) this.special_variable_value = special_variable_value;
     
     // codebtor_strategy is required if target_role is CODEUDOR or AMBAS
     if (target_role === 'CODEUDOR' || target_role === 'AMBAS') {

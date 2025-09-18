@@ -11,6 +11,7 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
   const [error, setError] = useState(null);
   const [isCreatingNewTemplate, setIsCreatingNewTemplate] = useState(false);
   const [selectedTemplateComponents, setSelectedTemplateComponents] = useState(null); // New state for WhatsApp components
+  const [selectedTemplateDetails, setSelectedTemplateDetails] = useState(null); // New state for full template details
 
   // Cargar plantillas disponibles
   useEffect(() => {
@@ -46,6 +47,7 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
             previewSubject: '',
           }));
           setSelectedTemplateComponents(null); // Clear previous components
+          setSelectedTemplateDetails(null); // Clear previous template details
 
           console.log('Debug: campaignData.channel:', campaignData.channel);
           console.log('Debug: campaignData.message_template_id:', templateId);
@@ -55,18 +57,18 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
           const templateDetails = templates.find(t => t.id === templateId);
           console.log('Debug: templateDetails found:', templateDetails); // Log the actual object, not just boolean
 
-          // Fetch full template details to get components for WhatsApp preview
-          if (campaignData.channel === 'WHATSAPP' && templateDetails) {
-            console.log('Debug: Condition met for fetching full template details.');
+          // Fetch full template details to get components and special variable info
+          if (templateDetails) {
             console.log('Debug: Calling getTemplateById for templateId:', templateId);
             const fullTemplate = await getTemplateById(templateId);
             console.log('Debug: fullTemplate from getTemplateById:', fullTemplate);
-            setSelectedTemplateComponents(fullTemplate.components);
-            console.log('Debug: selectedTemplateComponents:', fullTemplate.components);
-          } else if (campaignData.channel === 'WHATSAPP' && !templateDetails) {
-            console.log('Debug: templateDetails not found for WhatsApp channel, skipping full template fetch.');
-          } else {
-            console.log('Debug: Not a WhatsApp channel or templateDetails not found, skipping full template fetch.');
+            setSelectedTemplateDetails(fullTemplate);
+
+            // Set components for WhatsApp preview
+            if (campaignData.channel === 'WHATSAPP') {
+              setSelectedTemplateComponents(fullTemplate.components);
+              console.log('Debug: selectedTemplateComponents:', fullTemplate.components);
+            }
           }
 
 
@@ -84,6 +86,7 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
             previewSubject: 'Error',
           }));
           setSelectedTemplateComponents(null);
+          setSelectedTemplateDetails(null);
         }
       } else if (!isCreatingNewTemplate) {
         setCampaignData(prev => ({
@@ -117,6 +120,7 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
       previewSubject: '',
     }));
     setSelectedTemplateComponents(null); // Clear components when creating new
+    setSelectedTemplateDetails(null); // Clear template details when creating new
   };
 
   return (
@@ -163,6 +167,39 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {campaignData.message_template_id && selectedTemplateDetails?.special_variable_name && ( // Show special variable input if template has one
+              <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-md">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <h3 className="text-sm font-medium text-amber-800">Variable Especial Requerida</h3>
+                    <div className="mt-2 text-sm text-amber-700">
+                      <p>Esta plantilla contiene una variable especial que debe ser completada:</p>
+                      <p className="mt-1 font-medium"><code className="bg-amber-100 px-1 rounded">{'{SPECIAL:' + selectedTemplateDetails.special_variable_name + '}'}</code></p>
+                    </div>
+                    <div className="mt-3">
+                      <label htmlFor="special_variable_value" className="block text-sm font-medium text-amber-800">Valor para la Variable Especial</label>
+                      <input
+                        type="text"
+                        id="special_variable_value"
+                        value={campaignData.special_variable_value || ''}
+                        onChange={e => setCampaignData({...campaignData, special_variable_value: e.target.value})}
+                        placeholder={`Ingresa el valor para ${selectedTemplateDetails.special_variable_name}`}
+                        maxLength="255"
+                        required
+                        className="mt-1 w-full p-2 border border-amber-300 rounded-md focus:ring-amber-500 focus:border-amber-500"
+                      />
+                      <p className="mt-1 text-xs text-amber-600">Máximo 255 caracteres. Este valor reemplazará la variable especial en todos los mensajes.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

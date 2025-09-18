@@ -157,6 +157,7 @@ const CreateCampaignPage = () => {
             audience_filter_id: filterIdToUse,
             target_role: campaignData.target_role,
             codebtor_strategy: (campaignData.target_role === 'CODEUDOR' || campaignData.target_role === 'AMBAS') ? campaignData.codebtor_strategy : null,
+            special_variable_value: campaignData.special_variable_value || null,
             ...campaignData.schedule_details
         });
         console.log('Creando schedule recurrente:', schedulePayload);
@@ -171,6 +172,7 @@ const CreateCampaignPage = () => {
           target_role: campaignData.target_role,
           codebtor_strategy: (campaignData.target_role === 'CODEUDOR' || campaignData.target_role === 'AMBAS') ? campaignData.codebtor_strategy : null,
           scheduled_at: campaignData.scheduled_at || null,
+          special_variable_value: campaignData.special_variable_value || null,
         });
         console.log('Enviando campaña única:', campaignPayload);
         await createAndLaunchCampaign(campaignPayload);
