@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { getSimpleFilters, BASE_URL } from '../../services/api';
+import { getSimpleFilters, getCampaignPreviewCSV } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import EmailPreview from './EmailPreview';
 import SimpleFilterRulesPreview from './SimpleFilterRulesPreview';
 import { toast } from 'sonner';
-import { 
-  DetailItem, 
-  WhatsAppIcon, 
-  SmsIcon, 
-  EMAILIcon 
+import {
+  DetailItem,
+  WhatsAppIcon,
+  SmsIcon,
+  EMAILIcon
 } from './wizardUtils';
 
 const Step5_Confirmation = ({ campaignData }) => {
@@ -19,6 +19,9 @@ const Step5_Confirmation = ({ campaignData }) => {
   const { templateName, previewContent, previewSubject, client_count = 0 } = campaignData;
   const { getAccessToken } = useAuth();
   const token = getAccessToken();
+
+  // Debug: verificar que tenemos token
+  console.log('Token disponible:', !!token);
 
   useEffect(() => {
     if (campaignData.audience_filter_id) {
@@ -95,15 +98,29 @@ const Step5_Confirmation = ({ campaignData }) => {
         campaignPayload.audience_definition = campaignData.definition;
       }
 
-      const response = await fetch(`${BASE_URL}/campaigns/preview/csv`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/csv,application/octet-stream,application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(campaignPayload),
-      });
+      // Validación adicional del payload
+      if (!campaignPayload.name || !campaignPayload.channel_type || !campaignPayload.message_template_id) {
+        throw new Error("Datos de campaña incompletos. Verifica nombre, canal y plantilla.");
+      }
+
+      if (!campaignPayload.audience_filter_id && !campaignPayload.audience_definition) {
+        throw new Error("Debe especificarse un filtro de audiencia o definición.");
+      }
+
+      // Asegurar que scheduled_at sea null si está vacío
+      if (campaignPayload.scheduled_at === '' || campaignPayload.scheduled_at === undefined) {
+        campaignPayload.scheduled_at = null;
+      }
+
+      // Debug: mostrar estructura de audience_definition si existe
+      if (campaignPayload.audience_definition) {
+        console.log('Estructura de audience_definition:', JSON.stringify(campaignPayload.audience_definition, null, 2));
+      }
+
+      // Usa la función centralizada de api.js para mayor consistencia
+      console.log('Enviando payload para CSV preview:', campaignPayload);
+      const response = await getCampaignPreviewCSV(campaignPayload);
+      console.log('Respuesta del servidor:', response.status, response.statusText);
 
       if (response.ok) {
         const blob = await response.blob();
@@ -121,32 +138,12 @@ const Step5_Confirmation = ({ campaignData }) => {
         window.URL.revokeObjectURL(url);
         toast.success("Archivo CSV descargado con éxito.");
       } else {
-        // Intenta extraer mensaje detallado del cuerpo de la respuesta
-        let errorMessage = `Error al descargar el CSV (${response.status})`;
-        try {
-          const contentType = response.headers.get('Content-Type') || '';
-          if (contentType.includes('application/json')) {
-            const data = await response.json();
-            if (Array.isArray(data?.detail)) {
-              errorMessage = data.detail.map(d => (d.msg || d.message || JSON.stringify(d))).join('; ');
-            } else if (typeof data?.detail === 'string') {
-              errorMessage = data.detail;
-            } else if (data?.message) {
-              errorMessage = data.message;
-            }
-          } else {
-            const text = await response.text();
-            if (text) errorMessage = text;
-          }
-        } catch (parseErr) {
-          // Ignora errores de parsing, ya tenemos un mensaje genérico
-        }
-        console.error('Error al descargar el CSV:', errorMessage);
-        toast.error(errorMessage);
+        // Si la respuesta no es ok, getCampaignPreviewCSV ya lanzó un error
+        throw new Error(`Error al descargar el CSV (${response.status})`);
       }
     } catch (error) {
-      console.error('Error en la solicitud de descarga de CSV:', error);
-      toast.error("Error en la solicitud de descarga de CSV.");
+      console.error('Error al descargar el CSV:', error);
+      toast.error(error.message || "Error en la solicitud de descarga de CSV.");
     } finally {
       setIsDownloading(false);
     }
@@ -200,6 +197,13 @@ const Step5_Confirmation = ({ campaignData }) => {
           </DetailItem>
         )}
         <DetailItem label="Clientes Alcanzados">{client_count.toLocaleString()}</DetailItem>
+        {campaignData.special_variable_value && (
+          <DetailItem label="Valor Variable Especial">
+            <span className="font-mono bg-amber-100 px-2 py-1 rounded text-sm">
+              {campaignData.special_variable_value}
+            </span>
+          </DetailItem>
+        )}
       </div>
 
       <div className="mt-8 flex justify-end">

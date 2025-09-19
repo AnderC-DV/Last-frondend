@@ -40,6 +40,8 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
     const fetchPreviewAndComponents = async () => {
       const templateId = campaignData.message_template_id;
       if (templateId && !isCreatingNewTemplate) {
+        let fullTemplate = null; // Declarar fuera del try para que esté disponible en todo el scope
+
         try {
           setCampaignData(prev => ({
             ...prev,
@@ -60,7 +62,7 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
           // Fetch full template details to get components and special variable info
           if (templateDetails) {
             console.log('Debug: Calling getTemplateById for templateId:', templateId);
-            const fullTemplate = await getTemplateById(templateId);
+            fullTemplate = await getTemplateById(templateId);
             console.log('Debug: fullTemplate from getTemplateById:', fullTemplate);
             setSelectedTemplateDetails(fullTemplate);
 
@@ -77,6 +79,7 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
             templateName: templateDetails ? templateDetails.name : 'Desconocido',
             previewContent: previewData.preview_content,
             previewSubject: previewData.preview_subject || (templateDetails ? templateDetails.subject : ''),
+            selectedTemplateDetails: fullTemplate || null,
           }));
         } catch (err) {
           console.error("Error al cargar la vista previa o componentes", err);
@@ -106,7 +109,12 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
 
   const handleTemplateChange = (e) => {
     const templateId = e.target.value;
-    setCampaignData({ ...campaignData, message_template_id: templateId });
+    setCampaignData({
+      ...campaignData,
+      message_template_id: templateId,
+      selectedTemplateDetails: null,
+      special_variable_value: ''
+    });
     setIsCreatingNewTemplate(false);
   };
 
@@ -118,6 +126,8 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
       templateName: '',
       previewContent: '',
       previewSubject: '',
+      selectedTemplateDetails: null,
+      special_variable_value: '',
     }));
     setSelectedTemplateComponents(null); // Clear components when creating new
     setSelectedTemplateDetails(null); // Clear template details when creating new
@@ -171,6 +181,12 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
             )}
 
             {campaignData.message_template_id && selectedTemplateDetails?.special_variable_name && ( // Show special variable input if template has one
+              console.log('Mostrando campo de variable especial'),
+              console.log('selectedTemplateDetails:', selectedTemplateDetails),
+              console.log('special_variable_name:', selectedTemplateDetails?.special_variable_name),
+              console.log('current special_variable_value:', campaignData.special_variable_value),
+              true
+            ) && (
               <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-md">
                 <div className="flex items-start">
                   <div className="flex-shrink-0">
@@ -190,7 +206,12 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
                         type="text"
                         id="special_variable_value"
                         value={campaignData.special_variable_value || ''}
-                        onChange={e => setCampaignData({...campaignData, special_variable_value: e.target.value})}
+                        onChange={e => {
+                          console.log('Valor de variable especial cambiado:', e.target.value);
+                          const newData = {...campaignData, special_variable_value: e.target.value};
+                          console.log('Nuevo estado campaignData:', newData);
+                          setCampaignData(newData);
+                        }}
                         placeholder={`Ingresa el valor para ${selectedTemplateDetails.special_variable_name}`}
                         maxLength="255"
                         required

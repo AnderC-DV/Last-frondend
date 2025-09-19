@@ -228,4 +228,5 @@ export const getSignedUploadUrl = (conversation_id, mime_type, original_filename
 
 // --- Endpoints de Conversaciones ---
 export const getConversations = () => apiRequest('/conversations/');
+export const getConversation = (conversationId) => apiRequest(`/conversations/${conversationId}`);
 export const sendMessage = (conversationId, messageData) => apiRequest(`/conversations/${conversationId}/reply`, 'POST', messageData);

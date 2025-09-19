@@ -13,6 +13,7 @@ class CampaignCreate {
    * @param {string|null} [data.codebtor_strategy] - Co-debtor strategy if applicable.
    * @param {string|null} [data.scheduled_at] - Optional scheduled date in ISO format.
    * @param {string|null} [data.source_schedule_id] - Optional source schedule ID.
+   * @param {string|null} [data.special_variable_value] - Optional value for special variable.
    */
   constructor({
     name,
@@ -23,6 +24,7 @@ class CampaignCreate {
     codebtor_strategy = null,
     scheduled_at = null,
     source_schedule_id = null,
+    special_variable_value = null,
   }) {
     if (!name || name.length < 5 || name.length > 150) {
       throw new Error("Campaign name must be between 5 and 150 characters.");
@@ -58,6 +60,7 @@ class CampaignCreate {
     
     if (scheduled_at) this.scheduled_at = scheduled_at;
     if (source_schedule_id) this.source_schedule_id = source_schedule_id;
+    if (special_variable_value) this.special_variable_value = special_variable_value;
   }
 }
 

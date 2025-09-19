@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import loginBgImage from '../assets/LogoAT.png';
+import loginBgImage from '../assets/logo renovar_Nuevo.svg';
 import loginIllustration from '../assets/ilustracion-login.png';
 
 const LoginPage = () => {
@@ -151,7 +151,7 @@ const LoginPage = () => {
           {error && <div className="mt-4 text-red-600 text-sm text-center">{error}</div>}
 
           <p className="mt-6 text-center text-xs text-gray-500">
-            © {new Date().getFullYear()} AuraTech. Todos los derechos reservados.
+            © {new Date().getFullYear()} AuraTech - Renovar Financiera. Todos los derechos reservados.
           </p>
         </div>
       </div>

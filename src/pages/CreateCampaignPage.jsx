@@ -62,6 +62,8 @@ const CreateCampaignPage = () => {
     templateName: '',
     previewSubject: '',
     previewContent: '',
+    selectedTemplateDetails: null,
+    special_variable_value: '',
   });
   // Estado para el modal de decisión de guardado de filtro
   const [showFilterPrompt, setShowFilterPrompt] = useState(false);
@@ -79,14 +81,20 @@ const CreateCampaignPage = () => {
   const hasAudienceFilter = !!campaignData.audience_filter_id || (campaignData.definition && (campaignData.definition.general?.length > 0 || campaignData.definition.exclude?.length > 0));
   const isCodebtorStrategyMissing = campaignData.target_role === 'CODEUDOR' && !campaignData.codebtor_strategy;
 
+  // Verificar si la plantilla seleccionada tiene una variable especial que requiere valor
+  const hasSpecialVariable = campaignData.selectedTemplateDetails?.special_variable_name;
+  const isSpecialVariableValueMissing = hasSpecialVariable && !campaignData.special_variable_value?.trim();
+
   // Validaciones:
   // Paso 0: requiere canal y nombre >= 7 caracteres
   // Desde paso 1 en adelante: siempre debe mantenerse un filtro (guardado o reglas) seleccionado.
   // Si el rol es CODEUDOR, se debe seleccionar una estrategia.
+  // Si la plantilla tiene variable especial, se debe ingresar el valor.
   const isNextDisabled = (
     (currentStep === 0 && (!campaignData.channel || campaignData.name.trim().length < 7)) ||
     (currentStep >= 1 && !hasAudienceFilter) ||
-    (currentStep === 1 && isCodebtorStrategyMissing)
+    (currentStep === 1 && isCodebtorStrategyMissing) ||
+    (currentStep === 2 && isSpecialVariableValueMissing)
   );
   
   const handleNext = async () => {
@@ -103,6 +111,17 @@ const CreateCampaignPage = () => {
         alert('Debes seleccionar o construir un filtro antes de crear la campaña.');
         return;
       }
+
+      // Validar que se haya ingresado el valor de la variable especial si la plantilla la requiere
+      if (isSpecialVariableValueMissing) {
+        console.log('Validación fallida - falta valor de variable especial');
+        console.log('hasSpecialVariable:', hasSpecialVariable);
+        console.log('special_variable_value:', campaignData.special_variable_value);
+        console.log('isSpecialVariableValueMissing:', isSpecialVariableValueMissing);
+        alert(`La plantilla seleccionada requiere un valor para la variable especial "${campaignData.selectedTemplateDetails?.special_variable_name}". Por favor, ingresa este valor en el paso anterior.`);
+        return;
+      }
+
       // Si hay definición sin guardar, primero mostrar modal de decisión
       if (hasUnsavedDefinition) {
         setShowFilterPrompt(true);
@@ -157,10 +176,13 @@ const CreateCampaignPage = () => {
             audience_filter_id: filterIdToUse,
             target_role: campaignData.target_role,
             codebtor_strategy: (campaignData.target_role === 'CODEUDOR' || campaignData.target_role === 'AMBAS') ? campaignData.codebtor_strategy : null,
-            special_variable_value: campaignData.special_variable_value || null,
+            special_variable_value: campaignData.special_variable_value?.trim() || '',
             ...campaignData.schedule_details
         });
         console.log('Creando schedule recurrente:', schedulePayload);
+        console.log('Valor de special_variable_value (schedule):', campaignData.special_variable_value);
+        console.log('Valor trimmed (schedule):', campaignData.special_variable_value?.trim());
+        console.log('Valor final a enviar (schedule):', campaignData.special_variable_value?.trim() || '');
         await createSchedule(schedulePayload);
         alert('¡Campaña recurrente creada con éxito!');
       } else {
@@ -172,9 +194,12 @@ const CreateCampaignPage = () => {
           target_role: campaignData.target_role,
           codebtor_strategy: (campaignData.target_role === 'CODEUDOR' || campaignData.target_role === 'AMBAS') ? campaignData.codebtor_strategy : null,
           scheduled_at: campaignData.scheduled_at || null,
-          special_variable_value: campaignData.special_variable_value || null,
+          special_variable_value: campaignData.special_variable_value?.trim() || '',
         });
         console.log('Enviando campaña única:', campaignPayload);
+        console.log('Valor de special_variable_value:', campaignData.special_variable_value);
+        console.log('Valor trimmed:', campaignData.special_variable_value?.trim());
+        console.log('Valor final a enviar:', campaignData.special_variable_value?.trim() || '');
         await createAndLaunchCampaign(campaignPayload);
         alert('¡Campaña creada y lanzada con éxito!');
       }
