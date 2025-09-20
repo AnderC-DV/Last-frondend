@@ -62,13 +62,16 @@ const WppMessageContent = ({
       try {
         const response = await getMediaUrl(conversationId, msg.message_id);
 
-        if (response && response.signed_url) {
-          setMediaUrl(response.signed_url);
+        // El backend ahora devuelve { url: "...", expires_in: 3600 }
+        if (response && response.url) {
+          setMediaUrl(response.url);
         } else {
+          console.warn('Respuesta del backend no contiene URL:', response);
           setHasError(true);
         }
       } catch (error) {
         // Silenciar errores de CORS y conexión para no llenar la consola
+        console.warn('Error al cargar media:', error.message);
         setHasError(true);
       } finally {
         setIsLoading(false);
