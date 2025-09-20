@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { getConversations, sendMessage, getConversation, getMediaUrl, sendAudioFromGCS, sendDocumentFromGCS, sendImageFromGCS, sendVideoFromGCS, sendStickerFromGCS, getSignedUploadForMedia } from '../services/api';
+import { getConversations, sendMessage, getConversation, getConversationMessages, getMediaUrl, sendAudioFromGCS, sendDocumentFromGCS, sendImageFromGCS, sendVideoFromGCS, sendStickerFromGCS, getSignedUploadForMedia } from '../services/api';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import WppConversationSidebar from '../components/WppConversationSidebar';
 import WppChatArea from '../components/WppChatArea';
@@ -17,8 +17,43 @@ const WhatsAppChatPage = () => {
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
+
+  // Estados para paginación
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const [totalMessages, setTotalMessages] = useState(0);
+
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+
+  // Función de debug para inspeccionar el estado del sistema de carga
+  const debugPaginationState = useCallback(() => {
+    console.log('[DEBUG] Pagination State:', {
+      selectedConversation: selectedConversation?.id,
+      messagesCount: messages.length,
+      totalMessages,
+      isLoadingMessages,
+      hasMoreMessages,
+      offset,
+      isLoadingOlderMessages,
+      messages: messages.slice(0, 3).map(m => ({
+        id: m.id || m.message_id,
+        type: m.message_type,
+        timestamp: m.timestamp || m.created_at,
+        body: m.body?.substring(0, 50)
+      }))
+    });
+  }, [selectedConversation, messages, totalMessages, isLoadingMessages, hasMoreMessages, offset, isLoadingOlderMessages]);
+
+  // Exponer función de debug en window para acceso desde consola
+  useEffect(() => {
+    window.debugPaginationState = debugPaginationState;
+    return () => {
+      delete window.debugPaginationState;
+    };
+  }, [debugPaginationState]);
 
   // Definir funciones antes de usarlas en useEffect
   const scrollToBottom = useCallback(() => {
@@ -40,7 +75,77 @@ const WhatsAppChatPage = () => {
     // Mostrar/ocultar botón de scroll
     const shouldShowButton = scrollTop + clientHeight < scrollHeight - 200;
     setShowScrollButton(shouldShowButton);
-  }, []);
+
+    // Detectar si está cerca del inicio (primeros 100px) para cargar más mensajes antiguos
+    const isNearTop = scrollTop <= 100;
+    if (isNearTop && hasMoreMessages && !isLoadingOlderMessages && messages.length > 0) {
+      loadOlderMessages();
+    }
+  }, [hasMoreMessages, isLoadingOlderMessages, messages.length]);
+
+  // Función para cargar mensajes más antiguos usando paginación del backend
+  const loadOlderMessages = useCallback(async () => {
+    if (!selectedConversation || isLoadingOlderMessages || !hasMoreMessages) return;
+
+    setIsLoadingOlderMessages(true);
+    console.debug('[Pagination] Loading older messages for conversation:', selectedConversation.id, 'offset:', offset);
+
+    try {
+      // Cargar la siguiente página de mensajes usando offset
+      const conversationData = await getConversation(selectedConversation.id, {
+        limit: 20,
+        offset: offset
+      });
+
+      if (conversationData && conversationData.messages && Array.isArray(conversationData.messages)) {
+        const olderMessages = conversationData.messages;
+        console.debug(`[Pagination] Loaded ${olderMessages.length} older messages`);
+
+        if (olderMessages.length > 0) {
+          // Guardar el scroll actual antes de agregar mensajes
+          const container = messagesContainerRef.current;
+          const previousScrollHeight = container.scrollHeight;
+
+          // Agregar mensajes antiguos al inicio
+          // Agregar mensajes antiguos al inicio, evitando duplicados
+          setMessages(prevMessages => {
+            const existingIds = new Set(prevMessages.map(m => m.id || m.message_id));
+            const uniqueOlderMessages = olderMessages.filter(m => !existingIds.has(m.id || m.message_id));
+            return [...uniqueOlderMessages, ...prevMessages];
+          });
+
+          // Actualizar offset para la próxima carga
+          setOffset(prev => prev + 20);
+
+          // Actualizar hasMoreMessages basado en la respuesta del backend
+          setHasMoreMessages(conversationData.has_more || false);
+
+          // Restaurar la posición del scroll después de agregar mensajes
+          setTimeout(() => {
+            if (container) {
+              const newScrollHeight = container.scrollHeight;
+              const scrollDifference = newScrollHeight - previousScrollHeight;
+              container.scrollTop = scrollDifference;
+            }
+          }, 100);
+
+          console.debug(`[Pagination] Updated offset to: ${offset + 50}`);
+          console.debug(`[Pagination] Has more messages: ${conversationData.has_more}`);
+        } else {
+          setHasMoreMessages(false);
+          console.debug('[Pagination] No older messages found');
+        }
+      } else {
+        setHasMoreMessages(false);
+        console.debug('[Pagination] Invalid response format');
+      }
+    } catch (error) {
+      console.error('[Pagination] Error loading older messages:', error);
+      setHasMoreMessages(false);
+    } finally {
+      setIsLoadingOlderMessages(false);
+    }
+  }, [selectedConversation, isLoadingOlderMessages, hasMoreMessages, offset]);
 
   useEffect(() => {
     const fetchConversations = async () => {
@@ -55,69 +160,96 @@ const WhatsAppChatPage = () => {
     fetchConversations();
   }, []);
 
+  // Efecto para cargar los mensajes iniciales de una conversación
   useEffect(() => {
     if (selectedConversation) {
       const fetchMessages = async () => {
         try {
-          const conversationData = await getConversation(selectedConversation.id);
-          const newMessages = conversationData.messages || [];
+          setIsLoadingMessages(true);
+          // Resetear estados de paginación al cambiar de conversación
+          setHasMoreMessages(true);
+          setOffset(0);
+          setIsLoadingOlderMessages(false);
+          setTotalMessages(0);
 
-          // Auto-scroll si estamos cerca del final y llegan nuevos mensajes
-          const hasNewMessages = newMessages.length !== messages.length;
-          setMessages(newMessages);
+          const conversationData = await getConversation(selectedConversation.id, { limit: 20, offset: 0 });
 
-          // Hacer scroll automático si estamos cerca del final
-          if (hasNewMessages && isNearBottom) {
-            setTimeout(scrollToBottom, 100);
+          if (conversationData && conversationData.messages && Array.isArray(conversationData.messages)) {
+            const sortedMessages = conversationData.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            setMessages(sortedMessages);
+            setTotalMessages(conversationData.total_messages || conversationData.messages.length);
+            setHasMoreMessages(conversationData.has_more || false);
+            setOffset(20);
+
+            setTimeout(() => scrollToBottom(), 100);
+          } else {
+            setMessages([]);
+            setHasMoreMessages(false);
+            setTotalMessages(0);
           }
         } catch (error) {
-          console.error('Error fetching messages:', error);
+          console.error('[Pagination] Error fetching recent messages:', error);
+          if (error.message && !error.message.includes('CORS') && !error.message.includes('Failed to fetch')) {
+            alert(`Error al cargar mensajes: ${error.message}`);
+          }
+          setMessages([]);
+          setHasMoreMessages(false);
+          setTotalMessages(0);
+        } finally {
+          setIsLoadingMessages(false);
         }
       };
 
       fetchMessages();
-
-      // Polling for updates every 5 seconds
-      const interval = setInterval(fetchMessages, 5000);
-
-      return () => clearInterval(interval);
     } else {
       setMessages([]);
+      setHasMoreMessages(false);
+      setOffset(0);
+      setIsLoadingOlderMessages(false);
+      setIsLoadingMessages(false);
+      setTotalMessages(0);
     }
-  }, [selectedConversation, scrollToBottom, messages.length, isNearBottom]);
+  }, [selectedConversation, scrollToBottom]);
 
-  // Efecto para hacer scroll inicial cuando se carga la conversación
+  // Efecto para polling de nuevos mensajes
   useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(scrollToBottom, 100);
+    if (selectedConversation) {
+      const interval = setInterval(async () => {
+        try {
+          const latestData = await getConversation(selectedConversation.id, { limit: 20, offset: 0 });
+
+          if (latestData && latestData.messages && Array.isArray(latestData.messages)) {
+            const sortedMessages = latestData.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            setMessages(prevMessages => {
+              const existingIds = new Set(prevMessages.map(m => m.id || m.message_id));
+              const newMessages = sortedMessages.filter(m => !existingIds.has(m.id || m.message_id));
+              if (newMessages.length > 0) {
+                if (isNearBottom) {
+                  setTimeout(scrollToBottom, 100);
+                }
+                return [...prevMessages, ...newMessages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+              }
+              return prevMessages;
+            });
+            setTotalMessages(latestData.total_messages || latestData.messages.length);
+          }
+        } catch (error) {
+          console.error('[Pagination] Error fetching new messages via polling:', error);
+        }
+      }, 5000);
+
+      return () => clearInterval(interval);
     }
-  }, [messages.length, scrollToBottom]);
+  }, [selectedConversation, isNearBottom, scrollToBottom]);
 
   // Efecto para manejar el scroll del contenedor de mensajes
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (container) {
-      const handleScrollEvent = () => {
-        if (!messagesContainerRef.current) return;
-
-        const scrollContainer = messagesContainerRef.current;
-        const scrollTop = scrollContainer.scrollTop;
-        const scrollHeight = scrollContainer.scrollHeight;
-        const clientHeight = scrollContainer.clientHeight;
-
-        // Detectar si está cerca del final (últimos 100px)
-        const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
-        setIsNearBottom(isNearBottom);
-
-        // Mostrar/ocultar botón de scroll
-        const shouldShowButton = scrollTop + clientHeight < scrollHeight - 200;
-        setShowScrollButton(shouldShowButton);
-      };
-
-      container.addEventListener('scroll', handleScrollEvent);
-      return () => container.removeEventListener('scroll', handleScrollEvent);
+      container.addEventListener('scroll', handleScroll);
+      return () => container.removeEventListener('scroll', handleScroll);
     }
-  }, []);
+  }, [handleScroll]);
 
   const handleSendMessage = async () => {
     if (newMessage.trim() === '' || !selectedConversation) return;
@@ -199,19 +331,19 @@ const WhatsAppChatPage = () => {
       let response;
       switch (mediaType) {
         case 'image':
-          response = await sendImageFromGCS(selectedConversation.id, { storage_object: storageObject, mime_type: mimeType });
+          response = await sendImageFromGCS(selectedConversation.id, storageObject);
           break;
         case 'video':
-          response = await sendVideoFromGCS(selectedConversation.id, { storage_object: storageObject, mime_type: mimeType });
+          response = await sendVideoFromGCS(selectedConversation.id, storageObject);
           break;
         case 'audio':
-          response = await sendAudioFromGCS(selectedConversation.id, { storage_object: storageObject, mime_type: mimeType });
+          response = await sendAudioFromGCS(selectedConversation.id, storageObject);
           break;
         case 'document':
-          response = await sendDocumentFromGCS(selectedConversation.id, { storage_object: storageObject, mime_type: mimeType }, selectedMediaFile.name);
+          response = await sendDocumentFromGCS(selectedConversation.id, storageObject, selectedMediaFile.name);
           break;
         case 'sticker':
-          response = await sendStickerFromGCS(selectedConversation.id, { storage_object: storageObject, mime_type: mimeType });
+          response = await sendStickerFromGCS(selectedConversation.id, storageObject);
           break;
         default:
           throw new Error('Tipo de medio no soportado');
@@ -258,6 +390,9 @@ const WhatsAppChatPage = () => {
         messagesContainerRef={messagesContainerRef}
         showScrollButton={showScrollButton}
         scrollToBottom={scrollToBottom}
+        isLoadingMessages={isLoadingMessages}
+        isLoadingOlderMessages={isLoadingOlderMessages}
+        hasMoreMessages={hasMoreMessages}
       />
 
       <WppClientInfo />

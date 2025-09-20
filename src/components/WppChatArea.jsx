@@ -17,7 +17,10 @@ const WppChatArea = ({
   messagesEndRef,
   messagesContainerRef,
   showScrollButton,
-  scrollToBottom
+  scrollToBottom,
+  isLoadingMessages,
+  isLoadingOlderMessages,
+  hasMoreMessages
 }) => {
   return (
     <div className="flex-1 flex flex-col bg-white h-full min-h-0 overflow-hidden">
@@ -31,6 +34,9 @@ const WppChatArea = ({
           messagesEndRef={messagesEndRef}
           showScrollButton={showScrollButton}
           scrollToBottom={scrollToBottom}
+          isLoadingMessages={isLoadingMessages}
+          isLoadingOlderMessages={isLoadingOlderMessages}
+          hasMoreMessages={hasMoreMessages}
         />
       </div>
 

@@ -8,7 +8,10 @@ const WppMessageList = ({
   onDocumentClick,
   messagesEndRef,
   showScrollButton,
-  scrollToBottom
+  scrollToBottom,
+  isLoadingMessages,
+  isLoadingOlderMessages,
+  hasMoreMessages
 }) => {
   const messagesContainerRef = useRef(null);
 
@@ -21,11 +24,31 @@ const WppMessageList = ({
         backgroundColor: '#e5ddd5'
       }}
     >
-      {selectedConversation && messages.map((msg, index) => {
+      {/* Indicador de carga de mensajes antiguos */}
+      {isLoadingOlderMessages && hasMoreMessages && (
+        <div className="flex justify-center py-4">
+          <div className="flex items-center space-x-2 text-gray-500">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-500"></div>
+            <span className="text-sm">Cargando mensajes antiguos...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Indicador de carga inicial */}
+      {isLoadingMessages && messages.length === 0 && (
+        <div className="flex justify-center items-center h-full">
+          <div className="flex items-center space-x-2 text-gray-500">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-500"></div>
+            <span>Cargando conversación...</span>
+          </div>
+        </div>
+      )}
+
+      {selectedConversation && messages.map((msg) => {
         const isIncoming = msg.from_phone_number === selectedConversation.customer_phone_number;
         return (
           <div
-            key={msg.id || msg.message_id || index}
+            key={msg.id || msg.message_id || crypto.randomUUID()}
             className={`flex mb-2 ${isIncoming ? 'justify-start' : 'justify-end'}`}
           >
             <div

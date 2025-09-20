@@ -1,33 +1,94 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { getMediaUrl } from '../services/api';
 
 // Hook personalizado para detectar cuando un elemento entra en viewport
-const useIntersectionObserver = (ref, options = {}) => {
+const useIntersectionObserver = (ref, messageType, setLoadPriority) => {
   const [isIntersecting, setIsIntersecting] = useState(false);
+  const [hasBeenVisible, setHasBeenVisible] = useState(false);
+  const [isNearViewport, setIsNearViewport] = useState(false);
 
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsIntersecting(entry.isIntersecting);
-      },
-      {
-        threshold: 0.1,
-        rootMargin: '100px',
-        ...options
+    // Configuración optimizada según tipo de media
+    const getObserverConfig = (type) => {
+      switch (type) {
+        case 'image':
+          return {
+            threshold: 0.05,
+            rootMargin: '200px', // Precargar temprano
+            nearThreshold: 0.02,
+            nearMargin: '300px'
+          };
+        case 'video':
+        case 'audio':
+          return {
+            threshold: 0.1,
+            rootMargin: '150px', // Moderado
+            nearThreshold: 0.05,
+            nearMargin: '250px'
+          };
+        case 'document':
+        case 'sticker':
+          return {
+            threshold: 0.2,
+            rootMargin: '100px', // Solo cuando es muy visible
+            nearThreshold: 0.1,
+            nearMargin: '150px'
+          };
+        default:
+          return {
+            threshold: 0.1,
+            rootMargin: '100px',
+            nearThreshold: 0.05,
+            nearMargin: '200px'
+          };
       }
+    };
+
+    const config = getObserverConfig(messageType);
+
+    // Observer principal para carga inmediata
+    const mainObserver = new IntersectionObserver(
+      ([entry]) => {
+        const isVisible = entry.isIntersecting;
+        setIsIntersecting(isVisible);
+
+        // Marcar como visible al menos una vez para evitar recargas
+        if (isVisible && !hasBeenVisible) {
+          setHasBeenVisible(true);
+          setLoadPriority('high');
+          console.debug(`[LazyLoading] ${messageType} visible (high priority):`, element.id || 'unknown');
+        }
+      },
+      { threshold: config.threshold, rootMargin: config.rootMargin }
     );
 
-    observer.observe(element);
+    // Observer secundario para precarga (más amplio)
+    const preloadObserver = new IntersectionObserver(
+      ([entry]) => {
+        const isNear = entry.isIntersecting;
+        setIsNearViewport(isNear);
+
+        if (isNear && !hasBeenVisible) {
+          setLoadPriority('medium');
+          console.debug(`[LazyLoading] ${messageType} near viewport (medium priority):`, element.id || 'unknown');
+        }
+      },
+      { threshold: config.nearThreshold, rootMargin: config.nearMargin }
+    );
+
+    mainObserver.observe(element);
+    preloadObserver.observe(element);
 
     return () => {
-      observer.unobserve(element);
+      mainObserver.disconnect();
+      preloadObserver.disconnect();
     };
-  }, [ref, options]);
+  }, [ref, messageType, hasBeenVisible]);
 
-  return isIntersecting;
+  return { isIntersecting, hasBeenVisible, isNearViewport };
 };
 
 const WppMessageContent = ({
@@ -38,54 +99,108 @@ const WppMessageContent = ({
   const [mediaUrl, setMediaUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [loadAttempted, setLoadAttempted] = useState(false);
+  const [loadPriority, setLoadPriority] = useState('low'); // 'low', 'medium', 'high'
   const messageRef = useRef(null);
+  const loadTimeoutRef = useRef(null);
 
-  // Usar intersection observer para carga lazy
-  const isInViewport = useIntersectionObserver(messageRef, {
-    threshold: 0.1,
-    rootMargin: '100px'
-  });
+  // Usar intersection observer para carga lazy con configuración optimizada
+  const { isIntersecting, hasBeenVisible, isNearViewport } = useIntersectionObserver(messageRef, msg.message_type, setLoadPriority);
 
-  useEffect(() => {
-    const loadMedia = async () => {
-      // Solo cargar si está en viewport y es media
-      if (!isInViewport || !['image', 'video', 'audio', 'document', 'sticker'].includes(msg.message_type) || !msg.message_id) {
-        return;
-      }
+  // Función de carga con debounce
+  const debouncedLoadMedia = useCallback(() => {
+    // Limpiar timeout anterior
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+    }
 
-      // Si ya tenemos la URL o ya intentamos cargar, no hacer nada
-      if (mediaUrl || hasError) {
-        return;
-      }
-
-      setIsLoading(true);
-      try {
-        const response = await getMediaUrl(conversationId, msg.message_id);
-
-        // El backend ahora devuelve { url: "...", expires_in: 3600 }
-        if (response && response.url) {
-          setMediaUrl(response.url);
-        } else {
-          console.warn('Respuesta del backend no contiene URL:', response);
-          setHasError(true);
-        }
-      } catch (error) {
-        // Silenciar errores de CORS y conexión para no llenar la consola
-        console.warn('Error al cargar media:', error.message);
-        setHasError(true);
-      } finally {
-        setIsLoading(false);
+    // Aplicar delay según prioridad
+    const getDelay = (priority) => {
+      switch (priority) {
+        case 'high': return 0; // Inmediato
+        case 'medium': return 100; // 100ms
+        case 'low': return 300; // 300ms
+        default: return 200;
       }
     };
 
-    loadMedia();
-  }, [isInViewport, msg, conversationId, mediaUrl, hasError]);
+    const delay = getDelay(loadPriority);
 
-  // Mostrar indicador de carga
+    loadTimeoutRef.current = setTimeout(async () => {
+      // Solo cargar si está en viewport (o ya fue visible) y es media
+      const shouldLoad = (isIntersecting || hasBeenVisible || isNearViewport) &&
+                        ['image', 'video', 'audio', 'document', 'sticker'].includes(msg.message_type) &&
+                        msg.message_id;
+
+      if (!shouldLoad) {
+        return;
+      }
+
+      // Si ya tenemos la URL, ya intentamos cargar, o hay error, no hacer nada
+      if (mediaUrl || hasError || loadAttempted) {
+        return;
+      }
+
+      console.debug(`[LazyLoading] Iniciando carga de ${msg.message_type} (${loadPriority} priority):`, msg.message_id);
+      setIsLoading(true);
+
+      try {
+        const response = await getMediaUrl(conversationId, msg.message_id);
+
+        if (response && response.url) {
+          setMediaUrl(response.url);
+        } else {
+          console.warn(`[LazyLoading] Could not get media URL for ${msg.message_type}:`, response?.message);
+          setHasError(true);
+        }
+      } catch (error) {
+        console.warn(`[LazyLoading] Error loading ${msg.message_type}:`, error.message);
+        setHasError(true);
+      } finally {
+        setIsLoading(false);
+        setLoadAttempted(true); // Marcar que se intentó cargar
+      }
+    }, delay);
+  }, [isIntersecting, hasBeenVisible, isNearViewport, msg.message_type, msg.message_id, conversationId, mediaUrl, hasError, loadAttempted, loadPriority]);
+
+  useEffect(() => {
+    debouncedLoadMedia();
+
+    // Cleanup
+    return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+      }
+    };
+  }, [debouncedLoadMedia]);
+
+  // Mostrar indicador de carga optimizado con información detallada
   if (isLoading && ['image', 'video', 'audio', 'document', 'sticker'].includes(msg.message_type)) {
+    const getLoadingText = (type) => {
+      switch (type) {
+        case 'image': return 'Cargando imagen...';
+        case 'video': return 'Cargando video...';
+        case 'audio': return 'Cargando audio...';
+        case 'document': return 'Cargando documento...';
+        case 'sticker': return 'Cargando sticker...';
+        default: return 'Cargando...';
+      }
+    };
+
+    const getPriorityIndicator = () => {
+      if (loadPriority === 'high') return '🔥'; // Alta prioridad - visible
+      if (loadPriority === 'medium') return '⚡'; // Media prioridad - cerca
+      return '⏳'; // Baja prioridad - lejano
+    };
+
     return (
-      <div ref={messageRef}>
-        <p className="text-gray-500 italic">Cargando...</p>
+      <div ref={messageRef} className="flex items-center space-x-2 p-2">
+        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
+        <span className="text-xs">{getPriorityIndicator()}</span>
+        <p className="text-gray-500 italic text-sm">{getLoadingText(msg.message_type)}</p>
+        {isNearViewport && !isIntersecting && (
+          <span className="text-xs text-blue-500">(precarga)</span>
+        )}
       </div>
     );
   }

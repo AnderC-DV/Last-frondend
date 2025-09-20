@@ -235,22 +235,36 @@ export const uploadContactsCSV = (file) => apiRequestWithFile('/staff-contacts/b
 export const getSignedUploadUrl = (conversation_id, mime_type, original_filename) =>
   apiRequest('/whatsapp/media/generate_signed_upload_url', 'POST', { conversation_id, mime_type, original_filename });
 
-// Nuevo endpoint para subida directa a GCS
 export const getSignedUploadForMedia = (conversation_id, content_type, kind, original_filename) =>
   apiRequest('/conversations/signed-upload', 'POST', { conversation_id, content_type, kind, original_filename });
 
-// --- Endpoints de Upload de Medios ---
-export const generateSignedUploadUrl = (conversationId, mimeType, originalFilename, kind = 'media') =>
-  apiRequest('/whatsapp/media/generate_signed_upload_url', 'POST', {
-    conversation_id: conversationId,
-    mime_type: mimeType,
-    original_filename: originalFilename,
-    kind
-  });
-
 // --- Endpoints de Conversaciones ---
 export const getConversations = () => apiRequest('/conversations/');
-export const getConversation = (conversationId) => apiRequest(`/conversations/${conversationId}`);
+export const getConversation = (conversationId, params = {}) => {
+  const queryParams = new URLSearchParams();
+  if (params.limit) queryParams.append('limit', params.limit);
+  if (params.offset) queryParams.append('offset', params.offset);
+
+  const queryString = queryParams.toString();
+  const endpoint = queryString
+    ? `/conversations/${conversationId}?${queryString}`
+    : `/conversations/${conversationId}`;
+
+  return apiRequest(endpoint);
+};
+export const getConversationMessages = (conversationId, params = {}) => {
+  const queryParams = new URLSearchParams();
+  if (params.limit) queryParams.append('limit', params.limit);
+  if (params.before) queryParams.append('before', params.before);
+  if (params.after) queryParams.append('after', params.after);
+
+  const queryString = queryParams.toString();
+  const endpoint = queryString
+    ? `/conversations/${conversationId}/messages?${queryString}`
+    : `/conversations/${conversationId}/messages`;
+
+  return apiRequest(endpoint);
+};
 export const sendMessage = (conversationId, messageData) => apiRequest(`/conversations/${conversationId}/reply`, 'POST', messageData);
 // --- Endpoints de Respuesta Multimedia desde GCS ---
 export const sendAudioFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/audio-from-gcs`, 'POST', { storage_object: gcsUrl });
@@ -258,4 +272,12 @@ export const sendDocumentFromGCS = (conversationId, gcsUrl, filename) => apiRequ
 export const sendImageFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/image-from-gcs`, 'POST', { storage_object: gcsUrl });
 export const sendVideoFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/video-from-gcs`, 'POST', { storage_object: gcsUrl });
 export const sendStickerFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/sticker-from-gcs`, 'POST', { storage_object: gcsUrl });
-export const getMediaUrl = (conversationId, messageId) => apiRequest(`/conversations/${conversationId}/messages/${messageId}/media/signed-url`);
+export const getMediaUrl = async (conversationId, messageId) => {
+  try {
+    const response = await apiRequest(`/conversations/${conversationId}/messages/${messageId}/media/signed-url`);
+    return response;
+  } catch (error) {
+    console.error(`Failed to get media URL for message ${messageId}:`, error);
+    return { error: true, message: error.message };
+  }
+};
