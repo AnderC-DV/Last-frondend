@@ -10,6 +10,7 @@ import {
   SmsIcon,
   EMAILIcon
 } from './wizardUtils';
+import { generatePreviewWithSpecialVariable } from '../../utils/templateUtils';
 
 const Step5_Confirmation = ({ campaignData }) => {
   const [audienceName, setAudienceName] = useState('Cargando...');
@@ -88,6 +89,7 @@ const Step5_Confirmation = ({ campaignData }) => {
             ? campaignData.codebtor_strategy
             : null,
         scheduled_at: campaignData.scheduled_at || null,
+        special_variable_value: campaignData.special_variable_value || null,
         // source_schedule_id no es necesario para el preview de una campaña única
       };
 
@@ -217,16 +219,43 @@ const Step5_Confirmation = ({ campaignData }) => {
       </div>
 
       {campaignData.channel === 'EMAIL' ? (
-        <EmailPreview 
-          subject={previewSubject} 
-          htmlContent={previewContent} 
+        <EmailPreview
+          subject={previewSubject}
+          htmlContent={previewContent}
         />
       ) : (
         <div className="mt-8">
           <h3 className="text-lg font-semibold text-gray-800 mb-2">Vista Previa del Mensaje</h3>
+
+          {/* Mostrar vista previa con variable especial si existe */}
+          {campaignData.selectedTemplateDetails?.special_variable_name && campaignData.special_variable_value ? (
+            <div className="mb-4">
+              <h4 className="text-md font-medium text-gray-700 mb-2">Vista Previa con Variable Especial</h4>
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {generatePreviewWithSpecialVariable(
+                    previewContent,
+                    campaignData.selectedTemplateDetails,
+                    campaignData.special_variable_value
+                  )}
+                </p>
+              </div>
+              <p className="text-xs text-green-600 mt-2 text-center">
+                ✅ Vista previa con la variable especial reemplazada
+              </p>
+            </div>
+          ) : null}
+
+          {/* Vista previa original */}
           <div className="p-4 bg-gray-50 rounded-lg border">
             <p className="text-gray-700 whitespace-pre-wrap">{previewContent}</p>
           </div>
+          <p className="text-xs text-gray-400 mt-4 text-center">
+            Las variables se completarán automáticamente con los datos de cada destinatario.
+            {campaignData.selectedTemplateDetails?.special_variable_name && !campaignData.special_variable_value &&
+              ' El valor de la variable especial se aplicará al enviar la campaña.'
+            }
+          </p>
         </div>
       )}
     </div>

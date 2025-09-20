@@ -4,6 +4,7 @@ import EmailPreview from './EmailPreview';
 import WhatsAppEditor from '../WhatsAppEditor';
 import WhatsAppPreview from '../WhatsAppPreview'; // Import the new WhatsAppPreview component
 import { getTemplateById } from '../../services/api'; // Import getTemplateById
+import { generatePreviewWithSpecialVariable } from '../../utils/templateUtils';
 
 const Step3_Template = ({ campaignData, setCampaignData }) => {
   const [templates, setTemplates] = useState([]);
@@ -227,7 +228,7 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
             {campaignData.message_template_id && ( // Only show preview if a template is selected
               <>
                 {campaignData.channel === 'EMAIL' ? (
-                  <EmailPreview 
+                  <EmailPreview
                     subject={campaignData.previewSubject}
                     htmlContent={campaignData.previewContent}
                   />
@@ -236,11 +237,35 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
                 ) : (
                   <div className="mt-8 pt-8 border-t">
                     <h3 className="text-xl font-bold text-gray-800 mb-4">Vista Previa del Mensaje</h3>
+
+                    {/* Mostrar vista previa con variable especial si existe */}
+                    {selectedTemplateDetails?.special_variable_name && campaignData.special_variable_value ? (
+                      <div className="mb-6">
+                        <h4 className="text-lg font-semibold text-gray-700 mb-2">Vista Previa con Variable Especial</h4>
+                        <div className="bg-green-50 border border-green-200 rounded-xl p-6">
+                          <p className="text-gray-700 whitespace-pre-wrap">
+                            {generatePreviewWithSpecialVariable(
+                              campaignData.previewContent,
+                              selectedTemplateDetails,
+                              campaignData.special_variable_value
+                            )}
+                          </p>
+                        </div>
+                        <p className="text-xs text-green-600 mt-2 text-center">
+                          ✅ Vista previa con la variable especial reemplazada
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {/* Vista previa original */}
                     <div className="bg-white rounded-xl shadow-md border w-full p-6">
                       <p className="text-gray-700 whitespace-pre-wrap">{campaignData.previewContent}</p>
                     </div>
                     <p className="text-xs text-gray-400 mt-4 text-center">
                       Las variables se completarán automáticamente con los datos de cada destinatario.
+                      {selectedTemplateDetails?.special_variable_name && !campaignData.special_variable_value &&
+                        ' Ingresa un valor para la variable especial arriba para ver la vista previa completa.'
+                      }
                     </p>
                   </div>
                 )}

@@ -69,6 +69,12 @@ const apiRequest = async (endpoint, method = 'GET', body = null) => {
     } else {
       console.error(`API request failed: ${error.message}`);
     }
+
+    // Provide more specific error messages
+    if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+      throw new Error('Error de conexión: No se pudo conectar al servidor. Verifica tu conexión a internet.');
+    }
+
     throw error;
   }
 };
@@ -201,6 +207,9 @@ export const getTemplatesByStatus = (status) => apiRequest(`/templates/?status=$
 
 export const createTemplate = (templateData) => apiRequest('/templates/', 'POST', templateData);
 
+// Contar caracteres de plantilla SMS
+export const getCharacterCount = (content) => apiRequest('/templates/character-count', 'POST', { content });
+
 // --- Endpoints de Notificaciones ---
 export const getNotifications = () => apiRequest('/notifications/');
 export const getUnreadNotificationsCount = () => apiRequest('/notifications/unread-count');
@@ -223,10 +232,30 @@ export const reviewTemplate = (templateId, reviewData) => apiRequest(`/templates
 export const uploadContactsCSV = (file) => apiRequestWithFile('/staff-contacts/bulk', 'POST', file);
 
 // --- Endpoints de WhatsApp Media ---
-export const getSignedUploadUrl = (conversation_id, mime_type, original_filename) => 
+export const getSignedUploadUrl = (conversation_id, mime_type, original_filename) =>
   apiRequest('/whatsapp/media/generate_signed_upload_url', 'POST', { conversation_id, mime_type, original_filename });
+
+// Nuevo endpoint para subida directa a GCS
+export const getSignedUploadForMedia = (conversation_id, content_type, kind, original_filename) =>
+  apiRequest('/conversations/signed-upload', 'POST', { conversation_id, content_type, kind, original_filename });
+
+// --- Endpoints de Upload de Medios ---
+export const generateSignedUploadUrl = (conversationId, mimeType, originalFilename, kind = 'media') =>
+  apiRequest('/whatsapp/media/generate_signed_upload_url', 'POST', {
+    conversation_id: conversationId,
+    mime_type: mimeType,
+    original_filename: originalFilename,
+    kind
+  });
 
 // --- Endpoints de Conversaciones ---
 export const getConversations = () => apiRequest('/conversations/');
 export const getConversation = (conversationId) => apiRequest(`/conversations/${conversationId}`);
 export const sendMessage = (conversationId, messageData) => apiRequest(`/conversations/${conversationId}/reply`, 'POST', messageData);
+// --- Endpoints de Respuesta Multimedia desde GCS ---
+export const sendAudioFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/audio-from-gcs`, 'POST', { storage_object: gcsUrl });
+export const sendDocumentFromGCS = (conversationId, gcsUrl, filename) => apiRequest(`/conversations/${conversationId}/reply/document-from-gcs`, 'POST', { storage_object: gcsUrl, filename });
+export const sendImageFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/image-from-gcs`, 'POST', { storage_object: gcsUrl });
+export const sendVideoFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/video-from-gcs`, 'POST', { storage_object: gcsUrl });
+export const sendStickerFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/sticker-from-gcs`, 'POST', { storage_object: gcsUrl });
+export const getMediaUrl = (conversationId, messageId) => apiRequest(`/conversations/${conversationId}/messages/${messageId}/media/signed-url`);
