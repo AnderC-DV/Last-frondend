@@ -94,7 +94,8 @@ const CreateCampaignPage = () => {
     (currentStep === 0 && (!campaignData.channel || campaignData.name.trim().length < 7)) ||
     (currentStep >= 1 && !hasAudienceFilter) ||
     (currentStep === 1 && isCodebtorStrategyMissing) ||
-    (currentStep === 2 && isSpecialVariableValueMissing)
+    (currentStep === 2 && isSpecialVariableValueMissing) ||
+    (currentStep === 1 && campaignData.client_count === 0)
   );
   
   const handleNext = async () => {

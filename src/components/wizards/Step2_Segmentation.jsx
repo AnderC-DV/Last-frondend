@@ -85,9 +85,16 @@ const Step2_Segmentation = ({ campaignData, setCampaignData }) => {
         <div className="mt-6 p-4 bg-blue-50 rounded-lg text-center">
             <p className="text-blue-800">Número de Clientes Coincidentes: <span className="font-bold">{clientCount.toLocaleString()}</span></p>
         </div>
+        
         {!(campaignData.audience_filter_id || (campaignData.definition && (campaignData.definition.general?.length > 0 || campaignData.definition.exclude?.length > 0))) && (
           <div className="mt-4 p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-700">
             Debes seleccionar un filtro guardado o construir uno nuevo antes de continuar.
+          </div>
+        )}
+
+        {(campaignData.audience_filter_id || (campaignData.definition && (campaignData.definition.general?.length > 0 || campaignData.definition.exclude?.length > 0))) && clientCount === 0 && (
+          <div className="mt-4 p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-700">
+            El filtro seleccionado no tiene clientes que cumplan con los criterios. No podrás avanzar al siguiente paso.
           </div>
         )}
       </div>

@@ -9,6 +9,8 @@ const ConditionRow = ({ condition, onConditionChange, onRemove, fields, operator
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const isMultiValueOperator = ['in', 'not_in'].includes(condition.operator);
   const isNoValueOperator = ['is_null', 'is_not_null'].includes(condition.operator);
+  const isBetweenOperator = condition.operator === 'between';
+
   // Detectar si el campo seleccionado es de tipo fecha según metadata del backend o por heurística del nombre
   const fieldMeta = fields.find(f => f.variable_name === condition.field);
   const isDateField = !!fieldMeta && (
@@ -16,16 +18,36 @@ const ConditionRow = ({ condition, onConditionChange, onRemove, fields, operator
   );
 
   useEffect(() => {
+    // This effect runs on mount and fetches distinct values if a field is pre-selected (edit mode).
+    const fetchInitialDistinctValues = async () => {
+      if (condition.field && !isNoValueOperator && (!condition.distinctValues || condition.distinctValues.length === 0)) {
+        try {
+          const distinctValues = await getDistinctValues(condition.field);
+          onConditionChange(path, 'distinctValues', distinctValues);
+        } catch (error) {
+          console.error(`Error fetching distinct values for ${condition.field}:`, error);
+        }
+      }
+    };
+    fetchInitialDistinctValues();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only on mount
+
+  useEffect(() => {
     // Reset value based on operator type when operator changes
     if (isMultiValueOperator && !Array.isArray(condition.value)) {
       onConditionChange(path, 'value', []);
     } else if (isNoValueOperator && condition.value !== null) {
       onConditionChange(path, 'value', null);
-    } else if (!isMultiValueOperator && !isNoValueOperator && (condition.value === null || Array.isArray(condition.value))) {
+    } else if (isBetweenOperator && isDateField) {
+      if (!Array.isArray(condition.value) || condition.value.length !== 2) {
+        onConditionChange(path, 'value', ['', '']);
+      }
+    } else if (!isMultiValueOperator && !isNoValueOperator && !isBetweenOperator && (condition.value === null || Array.isArray(condition.value))) {
       onConditionChange(path, 'value', '');
     }
     // No need to re-fetch distinct values here, it's handled by handleFieldChange
-  }, [condition.operator, path, isMultiValueOperator, isNoValueOperator, condition.value]); // Depend on operator and path
+  }, [condition.operator, path, isMultiValueOperator, isNoValueOperator, isBetweenOperator, isDateField, condition.value]); // Depend on operator and path
 
   const handleFieldChange = async (e) => {
     const newField = e.target.value;
@@ -64,10 +86,37 @@ const ConditionRow = ({ condition, onConditionChange, onRemove, fields, operator
     onConditionChange(path, 'value', val);
   };
 
+  const handleDateRangeChange = (e, index) => {
+    const newDates = [...(condition.value || ['', ''])];
+    newDates[index] = e.target.value;
+    onConditionChange(path, 'value', newDates);
+  };
+
   const renderValueInput = () => {
     if (isNoValueOperator) {
       return <span className="text-sm text-gray-500 italic">No requiere valor</span>;
-    } else if (isMultiValueOperator && condition.distinctValues && condition.distinctValues.length > 0) {
+    }
+    if (isDateField && isBetweenOperator) {
+      const [startDate, endDate] = Array.isArray(condition.value) ? condition.value : ['', ''];
+      return (
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={startDate || ''}
+            onChange={(e) => handleDateRangeChange(e, 0)}
+            className="w-full p-2 border rounded-md text-sm"
+          />
+          <span className="text-sm text-gray-600">a</span>
+          <input
+            type="date"
+            value={endDate || ''}
+            onChange={(e) => handleDateRangeChange(e, 1)}
+            className="w-full p-2 border rounded-md text-sm"
+          />
+        </div>
+      );
+    }
+    if (isMultiValueOperator && condition.distinctValues && condition.distinctValues.length > 0) {
       const selectedValues = Array.isArray(condition.value) ? condition.value : [];
       const displayValue = selectedValues.length > 0
         ? selectedValues.join(', ')
@@ -250,14 +299,15 @@ const SimpleFilterBuilder = ({ setClientCount, setCampaignData, initialDefinitio
   const buildDefinition = () => {
     const cleanConditions = (conditions) =>
       conditions
-        .filter(c => c.field && c.operator && (
-          // Keep conditions if they have a non-empty value, or if they are 'is_null'/'is_not_null'
-          // For 'in'/'not_in', an empty array is a valid "no values specified" state, so don't filter it out.
-          (Array.isArray(c.value) && c.value.length > 0) ||
-          (!Array.isArray(c.value) && c.value !== '' && c.value !== null) ||
-          ['is_null', 'is_not_null'].includes(c.operator) ||
-          (['in', 'not_in'].includes(c.operator) && Array.isArray(c.value) && c.value.length === 0)
-        ))
+        .filter(c => {
+          if (!c.field || !c.operator) return false;
+          if (['is_null', 'is_not_null'].includes(c.operator)) return true;
+          if (c.operator === 'between' && Array.isArray(c.value)) {
+            return c.value.length === 2 && c.value[0] && c.value[1];
+          }
+          if (Array.isArray(c.value)) return c.value.length > 0;
+          return c.value !== '' && c.value !== null;
+        })
         .map(({ id: _id, distinctValues: _distinctValues, ...rest }) => {
           // Ensure 'in' and 'not_in' values are arrays, others are not
           // The handleValueChange function now ensures the value is already an array for multi-value operators.

@@ -1,7 +1,7 @@
 import React from 'react';
 import WppConversationList from './WppConversationList';
 
-const WppConversationSidebar = ({ conversations, selectedConversation, onSelectConversation }) => {
+const WppConversationSidebar = ({ conversations, selectedConversation, onSelectConversation, userRole }) => {
   return (
     <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full min-h-0">
       <div className="p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
@@ -24,6 +24,7 @@ const WppConversationSidebar = ({ conversations, selectedConversation, onSelectC
           conversations={conversations}
           selectedConversation={selectedConversation}
           onSelectConversation={onSelectConversation}
+          userRole={userRole}
         />
       </div>
     </div>

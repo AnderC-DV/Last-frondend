@@ -4,9 +4,13 @@ import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import WppConversationSidebar from '../components/WppConversationSidebar';
 import WppChatArea from '../components/WppChatArea';
 import WppClientInfo from '../components/WppClientInfo';
+import { useAuth } from '../context/AuthContext';
 
 
 const WhatsAppChatPage = () => {
+  const { user } = useAuth();
+  const userRole = user?.decoded?.role || 'gestor'; // Default to gestor if not set
+
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -151,7 +155,13 @@ const WhatsAppChatPage = () => {
     const fetchConversations = async () => {
       try {
         const data = await getConversations();
-        setConversations(data);
+        // Ordenar conversaciones de mayor a menor por la última hora de mensaje (más recientes primero)
+        const sortedData = data.sort((a, b) => {
+          const timeA = a.last_client_message_at ? new Date(a.last_client_message_at) : new Date(0);
+          const timeB = b.last_client_message_at ? new Date(b.last_client_message_at) : new Date(0);
+          return timeB - timeA;
+        });
+        setConversations(sortedData);
       } catch (error) {
         console.error('Error fetching conversations:', error);
       }
@@ -373,6 +383,7 @@ const WhatsAppChatPage = () => {
         conversations={conversations}
         selectedConversation={selectedConversation}
         onSelectConversation={setSelectedConversation}
+        userRole={userRole}
       />
 
       <WppChatArea
@@ -395,7 +406,9 @@ const WhatsAppChatPage = () => {
         hasMoreMessages={hasMoreMessages}
       />
 
-      <WppClientInfo />
+      {userRole !== 'administrador' && (
+        <WppClientInfo selectedConversation={selectedConversation} userRole={userRole} />
+      )}
 
       <DocumentPreviewModal fileUrl={previewFileUrl} onClose={() => setPreviewFileUrl(null)} />
     </div>

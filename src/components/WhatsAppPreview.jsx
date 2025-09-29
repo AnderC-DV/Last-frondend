@@ -54,7 +54,11 @@ const WhatsAppPreview = ({ components }) => {
 
   const renderBody = (body) => {
     if (!body || !body.text) return null;
-    const previewText = body.text.replace(/\{(\w+)\}/g, '<span class="font-bold text-blue-700">{{$$$1}}</span>');
+    // Highlight both {{var}} and {var} plus SPECIAL variables like {SPECIAL:NAME}
+    const previewText = body.text.replace(/\{\{([^}]+)\}\}|\{([A-Za-z0-9_:.]+)\}/g, (_m, g1, g2) => {
+      const token = g1 || g2;
+      return `<span class="font-bold text-blue-700 bg-blue-50 px-1 rounded">{{${token}}}</span>`;
+    });
     return <div className="p-3 text-gray-800 text-sm leading-snug" dangerouslySetInnerHTML={{ __html: previewText }}></div>;
   };
 

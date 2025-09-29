@@ -64,7 +64,17 @@ const WppMessageList = ({
                 onDocumentClick={onDocumentClick}
               />
               <p className={`text-xs mt-1 ${isIncoming ? 'text-gray-500' : 'text-green-100'}`}>
-                {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
+                {(() => {
+                  if (!msg.timestamp) return '';
+                  let date;
+                  if (isNaN(new Date(msg.timestamp).getTime())) {
+                    // If invalid as ISO, try as Unix seconds
+                    date = new Date(Number(msg.timestamp) * 1000);
+                  } else {
+                    date = new Date(msg.timestamp);
+                  }
+                  return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                })()}
               </p>
             </div>
           </div>

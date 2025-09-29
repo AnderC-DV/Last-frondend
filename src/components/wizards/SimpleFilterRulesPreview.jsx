@@ -6,13 +6,32 @@ const operatorMap = segmentationOperators.reduce((acc, op) => {
   return acc;
 }, {});
 
-const ConditionLine = ({ rule }) => (
-  <div className="text-xs text-gray-700 flex items-center">
-    <span className="font-semibold bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded-md mr-1.5">{rule.field}</span>
-    <span className="font-medium text-blue-600 mr-1.5">{operatorMap[rule.operator] || rule.operator}</span>
-    <span className="italic text-gray-800 truncate">{Array.isArray(rule.value) ? `[${rule.value.join(', ')}]` : rule.value}</span>
-  </div>
-);
+const ConditionLine = ({ rule }) => {
+  const isList = Array.isArray(rule.value);
+  const isBetween = rule.operator === 'between' && isList && rule.value.length === 2;
+
+  return (
+    <div className="text-xs text-gray-700">
+      <div className="flex items-start">
+        <span className="font-semibold bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded-md mr-1.5">{rule.field}</span>
+        <span className="font-medium text-blue-600 mr-1.5">{operatorMap[rule.operator] || rule.operator}</span>
+        {!isList && <span className="italic text-gray-800">{rule.value}</span>}
+        {isBetween && (
+          <span className="italic text-gray-800">
+            {rule.value[0]} y {rule.value[1]}
+          </span>
+        )}
+      </div>
+      {isList && !isBetween && (
+        <ul className="list-disc pl-6 mt-1 space-y-0.5">
+          {rule.value.map((val, i) => (
+            <li key={i} className="italic text-gray-600">{val}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 const SimpleFilterRulesPreview = ({ definition }) => {
   if (!definition || (!definition.general?.length && !definition.exclude?.length)) {

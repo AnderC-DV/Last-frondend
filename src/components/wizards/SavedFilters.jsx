@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getSimpleFilters, getSimpleClientCount } from '../../services/api';
 import SimpleFilterRulesPreview from './SimpleFilterRulesPreview';
 
@@ -11,10 +11,13 @@ import SimpleFilterRulesPreview from './SimpleFilterRulesPreview';
 const SavedFilters = ({ setClientCount, setCampaignData, onEdit, campaignData }) => {
     const [savedFilters, setSavedFilters] = useState([]);
     const [loadingList, setLoadingList] = useState(true);
-        const [countLoading, setCountLoading] = useState(false);
+    const [countLoading, setCountLoading] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
 
     // 1. Cargar filtros sólo una vez al montar
-        useEffect(() => {
+    useEffect(() => {
             let active = true;
             (async () => {
                 try {
@@ -34,6 +37,22 @@ const SavedFilters = ({ setClientCount, setCampaignData, onEdit, campaignData })
         if (!campaignData.audience_filter_id) return null;
         return savedFilters.find(f => f.id === campaignData.audience_filter_id) || null;
     }, [savedFilters, campaignData.audience_filter_id]);
+
+    const filteredFilters = useMemo(() => {
+        if (!searchTerm) return savedFilters;
+        return savedFilters.filter(f => f.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [savedFilters, searchTerm]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsDropdownOpen(false);
+                setSearchTerm(''); // Reset search on outside click
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     // 3. Hash estable de la definición (solo cambia cuando cambia la referencia real)
         // 4. Calcular conteo una sola vez al cargar si había un filtro preseleccionado
@@ -78,18 +97,42 @@ const SavedFilters = ({ setClientCount, setCampaignData, onEdit, campaignData })
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
+            <div ref={dropdownRef}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Filtros Guardados</label>
-                <select
-                    value={selectedFilter ? selectedFilter.id : ''}
-                    onChange={handleFilterSelect}
-                    className="w-full p-2 border rounded-md bg-white"
-                >
-                    <option value="">Selecciona un filtro guardado</option>
-                    {savedFilters.map(f => (
-                        <option key={f.id} value={f.id}>{f.name}</option>
-                    ))}
-                </select>
+                <div className="relative">
+                    <input
+                        type="text"
+                        placeholder="Busca o selecciona un filtro"
+                        value={isDropdownOpen ? searchTerm : (selectedFilter?.name || '')}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            if (!isDropdownOpen) setIsDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsDropdownOpen(true)}
+                        className="w-full p-2 border rounded-md bg-white"
+                    />
+                    {isDropdownOpen && (
+                        <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                            {filteredFilters.length > 0 ? (
+                                filteredFilters.map(f => (
+                                    <div
+                                        key={f.id}
+                                        onClick={() => {
+                                            handleFilterSelect({ target: { value: f.id } });
+                                            setIsDropdownOpen(false);
+                                            setSearchTerm('');
+                                        }}
+                                        className="p-2 hover:bg-gray-100 cursor-pointer"
+                                    >
+                                        {f.name}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="p-2 text-sm text-gray-500">No se encontraron filtros.</div>
+                            )}
+                        </div>
+                    )}
+                </div>
                 {selectedFilter && (
                     <div className="mt-4 flex justify-end gap-2">
                         <button
@@ -110,7 +153,7 @@ const SavedFilters = ({ setClientCount, setCampaignData, onEdit, campaignData })
                 {selectedFilter && selectedFilter.definition && (
                     <div>
                         <h4 className="text-sm font-medium text-gray-700 mb-2">Definición del Filtro</h4>
-                        <div className="p-4 bg-gray-50 rounded-lg border max-h-48 overflow-y-auto">
+                        <div className="p-4 bg-gray-50 rounded-lg border">
                             <SimpleFilterRulesPreview definition={selectedFilter.definition} />
                         </div>
                     </div>

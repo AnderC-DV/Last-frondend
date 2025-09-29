@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getTemplates, getTemplatePreview } from '../../services/api';
 import EmailPreview from './EmailPreview';
+import WhatsAppTemplatePreview from './whatsapp/WhatsAppTemplatePreview';
 import WhatsAppEditor from '../WhatsAppEditor';
-import WhatsAppPreview from '../WhatsAppPreview'; // Import the new WhatsAppPreview component
-import { getTemplateById } from '../../services/api'; // Import getTemplateById
+import { getTemplateById } from '../../services/api';
 import { generatePreviewWithSpecialVariable } from '../../utils/templateUtils';
 
 const Step3_Template = ({ campaignData, setCampaignData }) => {
@@ -11,8 +11,11 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isCreatingNewTemplate, setIsCreatingNewTemplate] = useState(false);
-  const [selectedTemplateComponents, setSelectedTemplateComponents] = useState(null); // New state for WhatsApp components
-  const [selectedTemplateDetails, setSelectedTemplateDetails] = useState(null); // New state for full template details
+  const [selectedTemplateComponents, setSelectedTemplateComponents] = useState(null);
+  const [selectedTemplateDetails, setSelectedTemplateDetails] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   // Cargar plantillas disponibles
   useEffect(() => {
@@ -36,12 +39,28 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
     fetchTemplates();
   }, [campaignData.channel]);
 
+  const filteredTemplates = useMemo(() => {
+    if (!searchTerm) return templates;
+    return templates.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [templates, searchTerm]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+        setSearchTerm(''); // Reset search on outside click
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Obtener vista previa y componentes cuando cambia la plantilla seleccionada
   useEffect(() => {
     const fetchPreviewAndComponents = async () => {
       const templateId = campaignData.message_template_id;
       if (templateId && !isCreatingNewTemplate) {
-        let fullTemplate = null; // Declarar fuera del try para que esté disponible en todo el scope
+        let fullTemplate = null;
 
         try {
           setCampaignData(prev => ({
@@ -49,31 +68,22 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
             previewContent: 'Cargando vista previa...',
             previewSubject: '',
           }));
-          setSelectedTemplateComponents(null); // Clear previous components
-          setSelectedTemplateDetails(null); // Clear previous template details
-
-          console.log('Debug: campaignData.channel:', campaignData.channel);
-          console.log('Debug: campaignData.message_template_id:', templateId);
-          console.log('Debug: current templates array:', templates); // Log the templates array
+          setSelectedTemplateComponents(null);
+          setSelectedTemplateDetails(null);
 
           const previewData = await getTemplatePreview(templateId);
           const templateDetails = templates.find(t => t.id === templateId);
-          console.log('Debug: templateDetails found:', templateDetails); // Log the actual object, not just boolean
 
-          // Fetch full template details to get components and special variable info
           if (templateDetails) {
-            console.log('Debug: Calling getTemplateById for templateId:', templateId);
             fullTemplate = await getTemplateById(templateId);
-            console.log('Debug: fullTemplate from getTemplateById:', fullTemplate);
+            console.log('fullTemplate from getTemplateById:', fullTemplate);
             setSelectedTemplateDetails(fullTemplate);
+            console.log('selectedTemplateDetails set to:', fullTemplate);
 
-            // Set components for WhatsApp preview
             if (campaignData.channel === 'WHATSAPP') {
               setSelectedTemplateComponents(fullTemplate.components);
-              console.log('Debug: selectedTemplateComponents:', fullTemplate.components);
             }
           }
-
 
           setCampaignData(prev => ({
             ...prev,
@@ -106,9 +116,16 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
     if (!loading) {
       fetchPreviewAndComponents();
     }
-  }, [campaignData.message_template_id, loading, templates, setCampaignData, isCreatingNewTemplate, campaignData.channel]);
+   }, [campaignData.message_template_id, loading, templates, setCampaignData, isCreatingNewTemplate, campaignData.channel]);
 
-  const handleTemplateChange = (e) => {
+   // Function to render variables in text
+   const renderTextWithVariables = (text) => {
+     if (!text) return '';
+     // Replace {{1}} with a styled span
+     return text.replace(/\{\{(\d+)\}\}/g, '<span class="text-blue-500 font-semibold">[{{$1}}]</span>');
+   };
+
+   const handleTemplateChange = (e) => {
     const templateId = e.target.value;
     setCampaignData({
       ...campaignData,
@@ -130,8 +147,8 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
       selectedTemplateDetails: null,
       special_variable_value: '',
     }));
-    setSelectedTemplateComponents(null); // Clear components when creating new
-    setSelectedTemplateDetails(null); // Clear template details when creating new
+    setSelectedTemplateComponents(null);
+    setSelectedTemplateDetails(null);
   };
 
   return (
@@ -166,28 +183,46 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
             {error && <p className="text-red-500">{error}</p>}
             
             {!loading && !error && (
-              <div>
+              <div ref={dropdownRef}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Plantillas Existentes</label>
-                <select
-                  value={campaignData.message_template_id || ''}
-                  onChange={handleTemplateChange}
-                  className="w-full p-3 border rounded-md bg-white"
-                >
-                  <option value="">Selecciona una plantilla</option>
-                  {templates.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Busca o selecciona una plantilla"
+                    value={isDropdownOpen ? searchTerm : (templates.find(t => t.id === campaignData.message_template_id)?.name || '')}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      if (!isDropdownOpen) setIsDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    className="w-full p-3 border rounded-md bg-white"
+                  />
+                  {isDropdownOpen && (
+                    <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {filteredTemplates.length > 0 ? (
+                        filteredTemplates.map(t => (
+                          <div
+                            key={t.id}
+                            onClick={() => {
+                              handleTemplateChange({ target: { value: t.id } });
+                              setIsDropdownOpen(false);
+                              setSearchTerm('');
+                            }}
+                            className="p-2 hover:bg-gray-100 cursor-pointer"
+                          >
+                            {t.name}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-2 text-sm text-gray-500">No se encontraron plantillas.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
-            {campaignData.message_template_id && selectedTemplateDetails?.special_variable_name && ( // Show special variable input if template has one
-              console.log('Mostrando campo de variable especial'),
-              console.log('selectedTemplateDetails:', selectedTemplateDetails),
-              console.log('special_variable_name:', selectedTemplateDetails?.special_variable_name),
-              console.log('current special_variable_value:', campaignData.special_variable_value),
-              true
-            ) && (
+            {campaignData.message_template_id && selectedTemplateDetails?.special_variable_name && (
               <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-md">
                 <div className="flex items-start">
                   <div className="flex-shrink-0">
@@ -208,10 +243,7 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
                         id="special_variable_value"
                         value={campaignData.special_variable_value || ''}
                         onChange={e => {
-                          console.log('Valor de variable especial cambiado:', e.target.value);
-                          const newData = {...campaignData, special_variable_value: e.target.value};
-                          console.log('Nuevo estado campaignData:', newData);
-                          setCampaignData(newData);
+                          setCampaignData({...campaignData, special_variable_value: e.target.value});
                         }}
                         placeholder={`Ingresa el valor para ${selectedTemplateDetails.special_variable_name}`}
                         maxLength="255"
@@ -225,47 +257,33 @@ const Step3_Template = ({ campaignData, setCampaignData }) => {
               </div>
             )}
 
-            {campaignData.message_template_id && ( // Only show preview if a template is selected
+            {campaignData.message_template_id && (
               <>
-                {campaignData.channel === 'EMAIL' ? (
+                {campaignData.channel === 'EMAIL' && (
                   <EmailPreview
                     subject={campaignData.previewSubject}
                     htmlContent={campaignData.previewContent}
                   />
-                ) : campaignData.channel === 'WHATSAPP' && selectedTemplateComponents ? (
-                  <WhatsAppPreview components={selectedTemplateComponents} />
-                ) : (
+                )}
+                {campaignData.channel === 'WHATSAPP' && (
+                  campaignData.previewContent ? (
+                    <WhatsAppTemplatePreview
+                      template={selectedTemplateDetails}
+                      components={selectedTemplateComponents}
+                      previewContent={campaignData.previewContent}
+                    />
+                  ) : (
+                    <div className="mt-8 pt-8 border-t text-center text-gray-500">Cargando vista previa de WhatsApp...</div>
+                  )
+                )}
+                {campaignData.channel !== 'EMAIL' && campaignData.channel !== 'WHATSAPP' && (
                   <div className="mt-8 pt-8 border-t">
                     <h3 className="text-xl font-bold text-gray-800 mb-4">Vista Previa del Mensaje</h3>
-
-                    {/* Mostrar vista previa con variable especial si existe */}
-                    {selectedTemplateDetails?.special_variable_name && campaignData.special_variable_value ? (
-                      <div className="mb-6">
-                        <h4 className="text-lg font-semibold text-gray-700 mb-2">Vista Previa con Variable Especial</h4>
-                        <div className="bg-green-50 border border-green-200 rounded-xl p-6">
-                          <p className="text-gray-700 whitespace-pre-wrap">
-                            {generatePreviewWithSpecialVariable(
-                              campaignData.previewContent,
-                              selectedTemplateDetails,
-                              campaignData.special_variable_value
-                            )}
-                          </p>
-                        </div>
-                        <p className="text-xs text-green-600 mt-2 text-center">
-                          ✅ Vista previa con la variable especial reemplazada
-                        </p>
-                      </div>
-                    ) : null}
-
-                    {/* Vista previa original */}
                     <div className="bg-white rounded-xl shadow-md border w-full p-6">
                       <p className="text-gray-700 whitespace-pre-wrap">{campaignData.previewContent}</p>
                     </div>
                     <p className="text-xs text-gray-400 mt-4 text-center">
                       Las variables se completarán automáticamente con los datos de cada destinatario.
-                      {selectedTemplateDetails?.special_variable_name && !campaignData.special_variable_value &&
-                        ' Ingresa un valor para la variable especial arriba para ver la vista previa completa.'
-                      }
                     </p>
                   </div>
                 )}

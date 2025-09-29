@@ -240,6 +240,7 @@ export const getSignedUploadForMedia = (conversation_id, content_type, kind, ori
 
 // --- Endpoints de Conversaciones ---
 export const getConversations = () => apiRequest('/conversations/');
+export const assignConversation = (conversationId, userId) => apiRequest(`/conversations/${conversationId}/assign/${userId}`, 'POST');
 export const getConversation = (conversationId, params = {}) => {
   const queryParams = new URLSearchParams();
   if (params.limit) queryParams.append('limit', params.limit);
@@ -281,3 +282,4 @@ export const getMediaUrl = async (conversationId, messageId) => {
     return { error: true, message: error.message };
   }
 };
+export const addTagToConversation = (conversationId, tagName) => apiRequest(`/conversations/${conversationId}/tags`, 'POST', { name: tagName });
