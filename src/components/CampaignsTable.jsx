@@ -168,6 +168,7 @@ export default function CampaignsTable({ channelFilter }) {
                       <CampaignActionMenu 
                         campaign={c} 
                         onViewReport={(camp) => { setSelectedCampaign(camp); setReportOpen(true); }}
+                        onCampaignDeleted={fetchCampaignStats}
                       />
                     </td>
                   </tr>

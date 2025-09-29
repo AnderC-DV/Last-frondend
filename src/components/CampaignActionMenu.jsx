@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
+import { deleteCampaign } from '../services/api';
+import { toast } from 'sonner';
 
 // --- Iconos para el menú ---
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
@@ -29,7 +31,7 @@ const MenuPortal = ({ children, coords }) => {
 };
 
 
-const CampaignActionMenu = ({ campaign, onViewReport }) => {
+const CampaignActionMenu = ({ campaign, onViewReport, onCampaignDeleted }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState({});
   const buttonRef = useRef(null);
@@ -50,9 +52,16 @@ const CampaignActionMenu = ({ campaign, onViewReport }) => {
       console.warn('Eliminar no permitido: la campaña no está en estado SCHEDULED.');
       return;
     }
-    // Aquí normalmente mostrarías un modal de confirmación
-    // y luego despacharías una acción para eliminar la campaña.
-    console.log(`Eliminando campaña: ${campaign.name}`);
+    if (window.confirm(`¿Estás seguro de que deseas eliminar la campaña "${campaign.name}"? Esta acción no se puede deshacer.`)) {
+      toast.promise(deleteCampaign(campaign.id), {
+        loading: 'Eliminando campaña...',
+        success: () => {
+          onCampaignDeleted(); // Llama a la función para refrescar la lista
+          return 'Campaña eliminada con éxito.';
+        },
+        error: (err) => `Error al eliminar: ${err.message}`,
+      });
+    }
     setIsOpen(false);
   };
 

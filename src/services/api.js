@@ -159,6 +159,7 @@ export const getCampaignStats = () => apiRequest('/campaigns/stats');
 export const refreshCampaignStats = () => apiRequest('/campaigns/stats/refresh', 'POST');
 export const createAndLaunchCampaign = (campaignData) => apiRequest('/campaigns/', 'POST', campaignData);
 export const getAllCampaigns = () => apiRequest('/campaigns/');
+export const deleteCampaign = (campaignId) => apiRequest(`/campaigns/${campaignId}`, 'DELETE');
 
 // Preview de campaña en CSV (respuesta como Blob)
 export const getCampaignPreviewCSV = async (payload) => {
