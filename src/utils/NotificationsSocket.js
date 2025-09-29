@@ -32,10 +32,12 @@ export class NotificationsSocket {
   /**
    * @param {() => Promise<string> | string} getToken
    * @param {(e: Events) => void} onMessage
+   * @param {() => void} [onAuthFailure]
    */
-  constructor(getToken, onMessage) {
+  constructor(getToken, onMessage, onAuthFailure) {
     this.getToken = getToken;
     this.onMessage = onMessage;
+    this.onAuthFailure = onAuthFailure;
   }
 
   /**
@@ -82,10 +84,19 @@ export class NotificationsSocket {
     this.ws.onclose = async (ev) => {
       console.warn('[NotificationsSocket] Connection closed.', { code: ev.code, reason: ev.reason, wasClean: ev.wasClean });
       if (this.pingTimer) clearInterval(this.pingTimer);
-      // 4401 = token inválido/expirado; refrescar antes de reconectar
-      // Para 1006 (cierre anormal) o cualquier otro cierre inesperado, también intentamos refrescar el token
-      // ya que el servidor podría cerrar la conexión por token expirado sin enviar 4401.
-      if (ev.code === 4401 || ev.code === 1006 || ev.code === 1000) { // Added 1000 for normal closure, just to be safe
+
+      // Si el cierre es por token inválido (4401), notificar y detener la reconexión.
+      if (ev.code === 4401) {
+        console.error("[NotificationsSocket] Authentication failed. Token is invalid or expired.");
+        if (this.onAuthFailure) {
+          this.onAuthFailure();
+        }
+        // No intentar reconectar en caso de fallo de autenticación.
+        return;
+      }
+
+      // Para otros cierres inesperados, intentar reconectar.
+      if (ev.code === 1006 || ev.code === 1000) {
         console.log("[NotificationsSocket] WebSocket closed. Attempting to refresh token before reconnecting...");
         await this.getToken(); // Refresh token
       }

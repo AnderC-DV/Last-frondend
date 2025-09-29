@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { getConversations, sendMessage, getConversation, getConversationMessages, getMediaUrl, sendAudioFromGCS, sendDocumentFromGCS, sendImageFromGCS, sendVideoFromGCS, sendStickerFromGCS, getSignedUploadForMedia } from '../services/api';
+import { getConversations, sendMessage, getConversation, BASE_URL } from '../services/api';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import WppConversationSidebar from '../components/WppConversationSidebar';
 import WppChatArea from '../components/WppChatArea';
 import WppClientInfo from '../components/WppClientInfo';
 import { useAuth } from '../context/AuthContext';
+import { NotificationsSocket } from '../utils/NotificationsSocket';
+import { toast } from 'sonner';
 
 
 const WhatsAppChatPage = () => {
@@ -31,6 +33,13 @@ const WhatsAppChatPage = () => {
 
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const socketRef = useRef(null);
+
+  // Refs to hold current values for the WebSocket handler
+  const selectedConversationRef = useRef(selectedConversation);
+  selectedConversationRef.current = selectedConversation;
+  const isNearBottomRef = useRef(isNearBottom);
+  isNearBottomRef.current = isNearBottom;
 
   // Función de debug para inspeccionar el estado del sistema de carga
   const debugPaginationState = useCallback(() => {
@@ -221,36 +230,61 @@ const WhatsAppChatPage = () => {
     }
   }, [selectedConversation, scrollToBottom]);
 
-  // Efecto para polling de nuevos mensajes
+  // Efecto para manejar la conexión WebSocket
   useEffect(() => {
-    if (selectedConversation) {
-      const interval = setInterval(async () => {
-        try {
-          const latestData = await getConversation(selectedConversation.id, { limit: 20, offset: 0 });
-
-          if (latestData && latestData.messages && Array.isArray(latestData.messages)) {
-            const sortedMessages = latestData.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-            setMessages(prevMessages => {
-              const existingIds = new Set(prevMessages.map(m => m.id || m.message_id));
-              const newMessages = sortedMessages.filter(m => !existingIds.has(m.id || m.message_id));
-              if (newMessages.length > 0) {
-                if (isNearBottom) {
-                  setTimeout(scrollToBottom, 100);
-                }
-                return [...prevMessages, ...newMessages].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-              }
+    // Handler for incoming WebSocket messages
+    const handleWsMessage = (event) => {
+      console.log('WebSocket event received:', event);
+      if (event.event === 'message.created') {
+        const newMessage = event.payload;
+        // Use the ref to get the current selected conversation
+        if (newMessage.conversation_id === selectedConversationRef.current?.id) {
+          setMessages(prevMessages => {
+            // Avoid duplicates
+            if (prevMessages.some(msg => msg.id === newMessage.id)) {
               return prevMessages;
-            });
-            setTotalMessages(latestData.total_messages || latestData.messages.length);
+            }
+            const updatedMessages = [...prevMessages, newMessage];
+            return updatedMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          });
+          // Use the ref to get the current scroll state
+          if (isNearBottomRef.current) {
+            setTimeout(scrollToBottom, 100);
           }
-        } catch (error) {
-          console.error('[Pagination] Error fetching new messages via polling:', error);
         }
-      }, 5000);
+      }
+      // Handle other events like 'conversation.updated' here
+    };
 
-      return () => clearInterval(interval);
+    // Initialize the socket only once
+    if (!socketRef.current) {
+      const handleAuthFailure = () => {
+        toast.error('La sesión ha expirado', {
+          description: 'Por favor, inicia sesión de nuevo para continuar.',
+        });
+        logout();
+      };
+
+      socketRef.current = new NotificationsSocket(
+        () => user.token, // Provide the auth token
+        handleWsMessage,
+        handleAuthFailure // Provide the auth failure handler
+      );
     }
-  }, [selectedConversation, isNearBottom, scrollToBottom]);
+
+    // Connect the socket
+    if (user.token) {
+      socketRef.current.connect(BASE_URL);
+    }
+
+    // Cleanup the connection when the component unmounts
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+    };
+  }, [user.token, scrollToBottom]);
 
   // Efecto para manejar el scroll del contenedor de mensajes
   useEffect(() => {
@@ -264,6 +298,20 @@ const WhatsAppChatPage = () => {
   const handleSendMessage = async () => {
     if (newMessage.trim() === '' || !selectedConversation) return;
 
+    const temporaryId = `temp_${Date.now()}`;
+    const optimisticMessage = {
+      id: temporaryId,
+      message_id: temporaryId,
+      body: newMessage,
+      timestamp: new Date().toISOString(),
+      from_phone_number: null,
+      message_type: 'text',
+    };
+
+    setMessages(prevMessages => [...prevMessages, optimisticMessage]);
+    setNewMessage('');
+    setTimeout(scrollToBottom, 100);
+
     try {
       const messageData = {
         messaging_product: "whatsapp",
@@ -273,17 +321,30 @@ const WhatsAppChatPage = () => {
         text: { body: newMessage },
       };
       const response = await sendMessage(selectedConversation.id, messageData);
-      // Assuming the response contains the sent message, add it to messages
-      if (response) {
-        setMessages(prevMessages => [...prevMessages, response]);
-        // Hacer scroll automático al enviar mensaje
-        setTimeout(scrollToBottom, 100);
+
+      if (response && response.id) {
+        setMessages(prevMessages =>
+          prevMessages.map(msg =>
+            msg.id === temporaryId
+              // Fusiona la respuesta con el mensaje optimista para no perder el body
+              ? { ...optimisticMessage, ...response }
+              : msg
+          )
+        );
+      } else {
+        // Si la respuesta es inesperada, al menos reemplaza el ID temporal
+        // para evitar que el mensaje se quede "pegado" como optimista.
+        setMessages(prevMessages =>
+          prevMessages.map(msg =>
+            msg.id === temporaryId ? { ...msg, id: response?.id || temporaryId } : msg
+          )
+        );
       }
-      setNewMessage('');
+
     } catch (error) {
       console.error('Error sending message:', error);
-      // Silenciar errores comunes para no molestar al usuario
-      // Solo mostrar alert para errores críticos
+      // En caso de error, elimina el mensaje optimista
+      setMessages(prevMessages => prevMessages.filter(msg => msg.id !== temporaryId));
       if (error.message && !error.message.includes('CORS') && !error.message.includes('Failed to fetch')) {
         alert('Error al enviar el mensaje: ' + error.message);
       }
