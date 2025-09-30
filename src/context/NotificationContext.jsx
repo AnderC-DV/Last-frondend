@@ -13,8 +13,36 @@ const NotificationProvider = ({ children }) => {
   const [loadingCount, setLoadingCount] = useState(true);
   const { getAccessToken, isAuthenticated, loading: authLoading } = useAuth(); // Get authLoading
   const socketRef = useRef(/** @type {NotificationsSocket | undefined} */ (undefined));
+  const subscribersRef = useRef({});
+
+  const subscribe = useCallback((event, callback) => {
+    if (!subscribersRef.current[event]) {
+      subscribersRef.current[event] = [];
+    }
+    subscribersRef.current[event].push(callback);
+    // Return an unsubscribe function for cleanup
+    return () => {
+      if (subscribersRef.current[event]) {
+        subscribersRef.current[event] = subscribersRef.current[event].filter(
+          (cb) => cb !== callback
+        );
+      }
+    };
+  }, []);
 
   const handleNewNotification = useCallback((msg) => {
+    // Dispatch to generic subscribers first
+    if (subscribersRef.current[msg.event]) {
+      subscribersRef.current[msg.event].forEach((callback) => {
+        try {
+          callback(msg.payload);
+        } catch (e) {
+          console.error(`Error in subscriber for event ${msg.event}:`, e);
+        }
+      });
+    }
+
+    // Original logic for notifications panel
     console.debug('[NotificationContext] Event received:', msg.event, msg.payload);
     if (msg.event === 'snapshot') {
       const list = msg.payload.slice().sort((a, b) => (new Date(a.created_at) < new Date(b.created_at) ? 1 : -1));
@@ -150,7 +178,7 @@ const NotificationProvider = ({ children }) => {
   }, [getAccessToken, handleNewNotification, fetchNotifications, isAuthenticated, authLoading]);
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, loading, loadingCount, fetchNotifications, markAsRead, markAllAsRead }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, loading, loadingCount, fetchNotifications, markAsRead, markAllAsRead, subscribe }}>
       {children}
     </NotificationContext.Provider>
   );

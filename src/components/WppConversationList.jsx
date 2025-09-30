@@ -1,8 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import WppWindowCounter from './WppWindowCounter';
 import { addTagToConversation, assignConversation } from '../services/api';
+import { NotificationContext } from '../context/NotificationContextDefinition';
 
-const WppConversationList = ({ conversations, selectedConversation, onSelectConversation, userRole }) => {
+const WppConversationList = ({ conversations: initialConversations, selectedConversation, onSelectConversation, userRole }) => {
+  const [conversations, setConversations] = useState(initialConversations);
+  const { subscribe } = useContext(NotificationContext);
+
+  useEffect(() => {
+    setConversations(initialConversations);
+  }, [initialConversations]);
+
+  useEffect(() => {
+    const handleConversationUpdate = (updatedConvo) => {
+      setConversations(prev =>
+        prev.map(c => c.id === updatedConvo.id ? { ...c, ...updatedConvo } : c)
+      );
+    };
+
+    const handleNewConversation = (newConvo) => {
+      setConversations(prev => [newConvo, ...prev]);
+    };
+
+    const handleNewMessage = (newMessage) => {
+      setConversations(prev => {
+        const convoIndex = prev.findIndex(c => c.id === newMessage.conversation_id);
+        if (convoIndex > -1) {
+          const updatedConvo = {
+            ...prev[convoIndex],
+            last_client_message_at: newMessage.timestamp,
+          };
+          const newConversations = [...prev];
+          newConversations.splice(convoIndex, 1);
+          return [updatedConvo, ...newConversations];
+        }
+        return prev;
+      });
+    };
+
+    const unsubscribeUpdate = subscribe('conversation.updated', handleConversationUpdate);
+    const unsubscribeCreate = subscribe('conversation.created', handleNewConversation);
+    const unsubscribeMessage = subscribe('message.created', handleNewMessage);
+
+    return () => {
+      unsubscribeUpdate();
+      unsubscribeCreate();
+      unsubscribeMessage();
+    };
+  }, [subscribe]);
+
   const handleAddTag = async (conversationId) => {
     const tagName = window.prompt('Ingrese el nombre de la etiqueta:');
     if (tagName && tagName.trim()) {
