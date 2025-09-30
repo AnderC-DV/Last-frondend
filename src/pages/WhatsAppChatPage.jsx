@@ -5,12 +5,13 @@ import WppConversationSidebar from '../components/WppConversationSidebar';
 import WppChatArea from '../components/WppChatArea';
 import WppClientInfo from '../components/WppClientInfo';
 import { useAuth } from '../context/AuthContext';
-import { NotificationsSocket } from '../utils/NotificationsSocket';
+import { useNotifications } from '../hooks/useNotifications';
 import { toast } from 'sonner';
 
 
 const WhatsAppChatPage = () => {
-  const { user } = useAuth();
+  const { subscribe } = useNotifications();
+  const { user, logout } = useAuth();
   const userRole = user?.decoded?.role || 'gestor'; // Default to gestor if not set
 
   const [conversations, setConversations] = useState([]);
@@ -33,7 +34,6 @@ const WhatsAppChatPage = () => {
 
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
-  const socketRef = useRef(null);
 
   // Refs to hold current values for the WebSocket handler
   const selectedConversationRef = useRef(selectedConversation);
@@ -230,72 +230,43 @@ const WhatsAppChatPage = () => {
     }
   }, [selectedConversation, scrollToBottom]);
 
-  // Efecto para manejar la conexión WebSocket
+  // Memoized WebSocket message handler
   useEffect(() => {
-    // Handler for incoming WebSocket messages
-    const handleWsMessage = (event) => {
-      console.log('WebSocket event received:', event);
-      if (event.event === 'message.created') {
-        const newMessage = event.payload;
-        // Use the ref to get the current selected conversation
-        if (newMessage.conversation_id === selectedConversationRef.current?.id) {
-          setMessages(prevMessages => {
-            // Check if this message is confirming an optimistic message
-            const optimisticIndex = prevMessages.findIndex(
-              (msg) => msg.status === 'pending' && msg.body === newMessage.body
-            );
+    const handleNewMessage = (newMessage) => {
+      if (!selectedConversation || newMessage.conversation_id !== selectedConversation.id) {
+        return;
+      }
 
-            if (optimisticIndex > -1) {
-              // If found, replace the optimistic message with the real one
-              const newMessages = [...prevMessages];
-              newMessages[optimisticIndex] = newMessage;
-              return newMessages;
-            } else if (!prevMessages.some(msg => msg.id === newMessage.id)) {
-              // Otherwise, if it's a new incoming message, add it
-              const updatedMessages = [...prevMessages, newMessage];
-              return updatedMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-            }
-            
-            return prevMessages; // Return current state if it's a duplicate
-          });
-          // Use the ref to get the current scroll state
-          if (isNearBottomRef.current) {
-            setTimeout(scrollToBottom, 100);
-          }
+      setMessages(prevMessages => {
+        const optimisticIndex = prevMessages.findIndex(
+          (msg) => msg.status === 'pending' && msg.body === newMessage.body
+        );
+
+        if (optimisticIndex > -1) {
+          const newMessages = [...prevMessages];
+          newMessages[optimisticIndex] = newMessage;
+          return newMessages;
         }
+
+        if (!prevMessages.some(msg => (msg.id || msg.message_id) === (newMessage.id || newMessage.message_id))) {
+          const updatedMessages = [...prevMessages, newMessage];
+          return updatedMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        }
+
+        return prevMessages;
+      });
+
+      if (isNearBottomRef.current) {
+        setTimeout(scrollToBottom, 100);
       }
-      // Handle other events like 'conversation.updated' here
     };
 
-    // Initialize the socket only once
-    if (!socketRef.current) {
-      const handleAuthFailure = () => {
-        toast.error('La sesión ha expirado', {
-          description: 'Por favor, inicia sesión de nuevo para continuar.',
-        });
-        logout();
-      };
+    const unsubscribe = subscribe('conversation.message.created', handleNewMessage);
 
-      socketRef.current = new NotificationsSocket(
-        () => user.token, // Provide the auth token
-        handleWsMessage,
-        handleAuthFailure // Provide the auth failure handler
-      );
-    }
-
-    // Connect the socket
-    if (user.token) {
-      socketRef.current.connect(BASE_URL);
-    }
-
-    // Cleanup the connection when the component unmounts
     return () => {
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
-      }
+      unsubscribe();
     };
-  }, [user.token, scrollToBottom]);
+  }, [subscribe, scrollToBottom, selectedConversation]);
 
   // Efecto para manejar el scroll del contenedor de mensajes
   useEffect(() => {

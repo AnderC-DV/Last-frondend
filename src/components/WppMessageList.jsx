@@ -45,7 +45,7 @@ const WppMessageList = ({
       )}
 
       {selectedConversation && messages.map((msg) => {
-        const isIncoming = msg.from_phone_number === selectedConversation.customer_phone_number;
+        const isIncoming = msg.direction ? msg.direction === 'inbound' : msg.from_phone_number === selectedConversation.customer_phone_number;
         return (
           <div
             key={msg.id || msg.message_id || crypto.randomUUID()}

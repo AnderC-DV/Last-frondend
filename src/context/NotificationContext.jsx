@@ -44,6 +44,10 @@ const NotificationProvider = ({ children }) => {
 
     // Original logic for notifications panel
     console.debug('[NotificationContext] Event received:', msg.event, msg.payload);
+    console.log('--- NUEVA ACTUALIZACIÓN DE NOTIFICACIÓN ---');
+    console.log('Evento:', msg.event);
+    console.log('Contenido:', msg.payload);
+    console.log('-------------------------------------------');
     if (msg.event === 'snapshot') {
       const list = msg.payload.slice().sort((a, b) => (new Date(a.created_at) < new Date(b.created_at) ? 1 : -1));
       setNotifications(list);

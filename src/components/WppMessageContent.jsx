@@ -104,22 +104,25 @@ const WppMessageContent = ({
   const messageRef = useRef(null);
   const loadTimeoutRef = useRef(null);
 
+  // Normalizar propiedades del mensaje para manejar datos de API y WebSocket
+  const messageType = msg.type || msg.message_type;
+  const mediaId = msg.message_id || (msg.media ? msg.media.id : null);
+  const messageBody = msg.body || (msg.media ? msg.media.caption : null);
+
   // Usar intersection observer para carga lazy con configuración optimizada
-  const { isIntersecting, hasBeenVisible, isNearViewport } = useIntersectionObserver(messageRef, msg.message_type, setLoadPriority);
+  const { isIntersecting, hasBeenVisible, isNearViewport } = useIntersectionObserver(messageRef, messageType, setLoadPriority);
 
   // Función de carga con debounce
   const debouncedLoadMedia = useCallback(() => {
-    // Limpiar timeout anterior
     if (loadTimeoutRef.current) {
       clearTimeout(loadTimeoutRef.current);
     }
 
-    // Aplicar delay según prioridad
     const getDelay = (priority) => {
       switch (priority) {
-        case 'high': return 0; // Inmediato
-        case 'medium': return 100; // 100ms
-        case 'low': return 300; // 300ms
+        case 'high': return 0;
+        case 'medium': return 100;
+        case 'low': return 300;
         default: return 200;
       }
     };
@@ -127,41 +130,34 @@ const WppMessageContent = ({
     const delay = getDelay(loadPriority);
 
     loadTimeoutRef.current = setTimeout(async () => {
-      // Solo cargar si está en viewport (o ya fue visible) y es media
-      const shouldLoad = (isIntersecting || hasBeenVisible || isNearViewport) &&
-                        ['image', 'video', 'audio', 'document', 'sticker'].includes(msg.message_type) &&
-                        msg.message_id;
+      const isMedia = ['image', 'video', 'audio', 'document', 'sticker'].includes(messageType);
+      const shouldLoad = (isIntersecting || hasBeenVisible || isNearViewport) && isMedia && mediaId;
 
-      if (!shouldLoad) {
+      if (!shouldLoad || mediaUrl || hasError || loadAttempted) {
         return;
       }
 
-      // Si ya tenemos la URL, ya intentamos cargar, o hay error, no hacer nada
-      if (mediaUrl || hasError || loadAttempted) {
-        return;
-      }
-
-      console.debug(`[LazyLoading] Iniciando carga de ${msg.message_type} (${loadPriority} priority):`, msg.message_id);
+      console.debug(`[LazyLoading] Iniciando carga de ${messageType} (${loadPriority} priority):`, mediaId);
       setIsLoading(true);
 
       try {
-        const response = await getMediaUrl(conversationId, msg.message_id);
+        const response = await getMediaUrl(conversationId, mediaId);
 
         if (response && response.url) {
           setMediaUrl(response.url);
         } else {
-          console.warn(`[LazyLoading] Could not get media URL for ${msg.message_type}:`, response?.message);
+          console.warn(`[LazyLoading] Could not get media URL for ${messageType}:`, response?.message);
           setHasError(true);
         }
       } catch (error) {
-        console.warn(`[LazyLoading] Error loading ${msg.message_type}:`, error.message);
+        console.warn(`[LazyLoading] Error loading ${messageType}:`, error.message);
         setHasError(true);
       } finally {
         setIsLoading(false);
-        setLoadAttempted(true); // Marcar que se intentó cargar
+        setLoadAttempted(true);
       }
     }, delay);
-  }, [isIntersecting, hasBeenVisible, isNearViewport, msg.message_type, msg.message_id, conversationId, mediaUrl, hasError, loadAttempted, loadPriority]);
+  }, [isIntersecting, hasBeenVisible, isNearViewport, messageType, mediaId, conversationId, mediaUrl, hasError, loadAttempted, loadPriority]);
 
   useEffect(() => {
     debouncedLoadMedia();
@@ -174,96 +170,47 @@ const WppMessageContent = ({
     };
   }, [debouncedLoadMedia]);
 
-  // Mostrar indicador de carga optimizado con información detallada
-  if (isLoading && ['image', 'video', 'audio', 'document', 'sticker'].includes(msg.message_type)) {
-    const getLoadingText = (type) => {
-      switch (type) {
-        case 'image': return 'Cargando imagen...';
-        case 'video': return 'Cargando video...';
-        case 'audio': return 'Cargando audio...';
-        case 'document': return 'Cargando documento...';
-        case 'sticker': return 'Cargando sticker...';
-        default: return 'Cargando...';
-      }
-    };
-
-    const getPriorityIndicator = () => {
-      if (loadPriority === 'high') return '🔥'; // Alta prioridad - visible
-      if (loadPriority === 'medium') return '⚡'; // Media prioridad - cerca
-      return '⏳'; // Baja prioridad - lejano
-    };
-
+  // Mostrar indicador de carga optimizado
+  if (isLoading && ['image', 'video', 'audio', 'document', 'sticker'].includes(messageType)) {
     return (
       <div ref={messageRef} className="flex items-center space-x-2 p-2">
         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
-        <span className="text-xs">{getPriorityIndicator()}</span>
-        <p className="text-gray-500 italic text-sm">{getLoadingText(msg.message_type)}</p>
-        {isNearViewport && !isIntersecting && (
-          <span className="text-xs text-blue-500">(precarga)</span>
-        )}
+        <p className="text-gray-500 italic text-sm">Cargando...</p>
       </div>
     );
   }
 
   // Contenedor con referencia para intersection observer
   const renderMediaContent = () => {
-    switch (msg.message_type) {
+    switch (messageType) {
       case 'image':
         return mediaUrl ? (
-          <img
-            src={mediaUrl}
-            alt="Imagen"
-            className="max-w-xs rounded-lg"
-            onError={() => setHasError(true)}
-          />
-        ) : (
-          <p className="text-gray-500 italic">Imagen no disponible</p>
-        );
+          <div>
+            <img src={mediaUrl} alt="Imagen" className="max-w-xs rounded-lg" onError={() => setHasError(true)} />
+            {messageBody && <p className="text-sm leading-relaxed mt-1">{messageBody}</p>}
+          </div>
+        ) : <p className="text-gray-500 italic">Imagen no disponible</p>;
       case 'video':
         return mediaUrl ? (
-          <video
-            src={mediaUrl}
-            controls
-            className="max-w-xs rounded-lg"
-            onError={() => setHasError(true)}
-          />
-        ) : (
-          <p className="text-gray-500 italic">Video no disponible</p>
-        );
+          <div>
+            <video src={mediaUrl} controls className="max-w-xs rounded-lg" onError={() => setHasError(true)} />
+            {messageBody && <p className="text-sm leading-relaxed mt-1">{messageBody}</p>}
+          </div>
+        ) : <p className="text-gray-500 italic">Video no disponible</p>;
       case 'audio':
-        return mediaUrl ? (
-          <audio
-            src={mediaUrl}
-            controls
-            onError={() => setHasError(true)}
-          />
-        ) : (
-          <p className="text-gray-500 italic">Audio no disponible</p>
-        );
+        return mediaUrl ? <audio src={mediaUrl} controls onError={() => setHasError(true)} /> : <p className="text-gray-500 italic">Audio no disponible</p>;
       case 'document':
         return mediaUrl ? (
-          <button
-            onClick={() => onDocumentClick(mediaUrl)}
-            className="text-blue-500 underline hover:text-blue-700"
-          >
-            Ver Documento
+          <button onClick={() => onDocumentClick(mediaUrl)} className="text-blue-500 underline hover:text-blue-700">
+            {messageBody || 'Ver Documento'}
           </button>
-        ) : (
-          <p className="text-gray-500 italic">Documento no disponible</p>
-        );
+        ) : <p className="text-gray-500 italic">Documento no disponible</p>;
       case 'sticker':
-        return mediaUrl ? (
-          <img
-            src={mediaUrl}
-            alt="Sticker"
-            className="w-16 h-16"
-            onError={() => setHasError(true)}
-          />
-        ) : (
-          <p className="text-gray-500 italic">Sticker no disponible</p>
-        );
+        return mediaUrl ? <img src={mediaUrl} alt="Sticker" className="w-24 h-24" onError={() => setHasError(true)} /> : <p className="text-gray-500 italic">Sticker no disponible</p>;
+      case 'text':
+        return <p className="text-sm leading-relaxed">{messageBody}</p>;
       default:
-        return <p className="text-sm leading-relaxed">{msg.body || '[Mensaje no soportado]'}</p>;
+        return <p className="text-sm leading-relaxed">{messageBody || '[Mensaje no soportado]'}</p>;
     }
   };
 

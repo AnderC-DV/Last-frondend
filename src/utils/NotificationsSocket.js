@@ -46,9 +46,8 @@ export class NotificationsSocket {
   async connect(baseUrl) {
     const token = await this.getToken();
     const wsProtocol = baseUrl.startsWith('https') ? 'wss' : 'ws';
-    // Ensure baseUrl ends with /api/v1 if it's not already there, then append /notifications/ws
-    const cleanedBaseUrl = baseUrl.endsWith('/api/v1') ? baseUrl : `${baseUrl}/api/v1`;
-    const url = `${cleanedBaseUrl.replace(/^https?/, wsProtocol)}/notifications/ws?token=${encodeURIComponent(token)}`;
+    // The BASE_URL already includes /api/v1, so we just need to replace the protocol and append the path.
+    const url = `${baseUrl.replace(/^https?/, wsProtocol)}/notifications/ws?token=${encodeURIComponent(token)}`;
     console.debug('[NotificationsSocket] Attempting to connect to WebSocket. URL:', url.replace(/token=[^&]*/, 'token=***MASKED***')); // Mask token for logs
     console.debug('[NotificationsSocket] Token used for connection (first 10 chars):', token ? token.substring(0, 10) + '...' : 'No token');
 

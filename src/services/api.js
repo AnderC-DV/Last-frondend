@@ -274,13 +274,24 @@ export const sendDocumentFromGCS = (conversationId, gcsUrl, filename) => apiRequ
 export const sendImageFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/image-from-gcs`, 'POST', { storage_object: gcsUrl });
 export const sendVideoFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/video-from-gcs`, 'POST', { storage_object: gcsUrl });
 export const sendStickerFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/sticker-from-gcs`, 'POST', { storage_object: gcsUrl });
-export const getMediaUrl = async (conversationId, messageId) => {
-  try {
-    const response = await apiRequest(`/conversations/${conversationId}/messages/${messageId}/media/signed-url`);
-    return response;
-  } catch (error) {
-    console.error(`Failed to get media URL for message ${messageId}:`, error);
-    return { error: true, message: error.message };
+export const getMediaUrl = async (conversationId, messageId, retries = 3, initialDelay = 500) => {
+  let delay = initialDelay;
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await apiRequest(`/conversations/${conversationId}/messages/${messageId}/media/signed-url`);
+      return response;
+    } catch (error) {
+      if (i === 0) { // Solo mostrar el warning en el primer intento
+        console.warn(`Attempt ${i + 1} failed to get media URL for message ${messageId}:`, error.message);
+      }
+      if (i < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; // Exponential backoff
+      } else {
+        console.error(`All attempts failed to get media URL for message ${messageId}:`, error);
+        return { error: true, message: error.message };
+      }
+    }
   }
 };
 export const addTagToConversation = (conversationId, tagName) => apiRequest(`/conversations/${conversationId}/tags`, 'POST', { name: tagName });
