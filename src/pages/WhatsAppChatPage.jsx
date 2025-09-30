@@ -164,8 +164,8 @@ const WhatsAppChatPage = () => {
     const fetchConversations = async () => {
       try {
         const data = await getConversations();
-        // Ordenar conversaciones de mayor a menor por la última hora de mensaje (más recientes primero)
-        const sortedData = data.sort((a, b) => {
+        const conversationsWithUnread = data.map(c => ({ ...c, unread_count: c.unread_count || 0 }));
+        const sortedData = conversationsWithUnread.sort((a, b) => {
           const timeA = a.last_client_message_at ? new Date(a.last_client_message_at) : new Date(0);
           const timeB = b.last_client_message_at ? new Date(b.last_client_message_at) : new Date(0);
           return timeB - timeA;
@@ -233,40 +233,41 @@ const WhatsAppChatPage = () => {
   // Memoized WebSocket message handler
   useEffect(() => {
     const handleNewMessage = (newMessage) => {
-      if (!selectedConversation || newMessage.conversation_id !== selectedConversation.id) {
-        return;
-      }
+      setConversations(prev => {
+        const convoIndex = prev.findIndex(c => c.id === newMessage.conversation_id);
+        if (convoIndex === -1) return prev;
 
-      setMessages(prevMessages => {
-        const optimisticIndex = prevMessages.findIndex(
-          (msg) => msg.status === 'pending' && msg.body === newMessage.body
-        );
+        const updatedConvo = {
+          ...prev[convoIndex],
+          last_message_preview: newMessage.body || `[${newMessage.type}]`,
+          last_client_message_at: newMessage.timestamp,
+          unread_count: (prev[convoIndex].unread_count || 0) + 1,
+        };
 
-        if (optimisticIndex > -1) {
-          const newMessages = [...prevMessages];
-          newMessages[optimisticIndex] = newMessage;
-          return newMessages;
-        }
-
-        if (!prevMessages.some(msg => (msg.id || msg.message_id) === (newMessage.id || newMessage.message_id))) {
-          const updatedMessages = [...prevMessages, newMessage];
-          return updatedMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-        }
-
-        return prevMessages;
+        const newConversations = [...prev];
+        newConversations.splice(convoIndex, 1);
+        return [updatedConvo, ...newConversations];
       });
 
-      if (isNearBottomRef.current) {
-        setTimeout(scrollToBottom, 100);
+      if (selectedConversationRef.current?.id === newMessage.conversation_id) {
+        setMessages(prevMessages => {
+          if (!prevMessages.some(msg => (msg.id || msg.message_id) === (newMessage.id || newMessage.message_id))) {
+            const updatedMessages = [...prevMessages, newMessage];
+            return updatedMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          }
+          return prevMessages;
+        });
+
+        if (isNearBottomRef.current) {
+          setTimeout(scrollToBottom, 100);
+        }
       }
     };
 
     const unsubscribe = subscribe('conversation.message.created', handleNewMessage);
 
-    return () => {
-      unsubscribe();
-    };
-  }, [subscribe, scrollToBottom, selectedConversation]);
+    return () => unsubscribe();
+  }, [subscribe, scrollToBottom]);
 
   // Efecto para manejar el scroll del contenedor de mensajes
   useEffect(() => {
