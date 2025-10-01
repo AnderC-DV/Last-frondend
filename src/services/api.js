@@ -304,3 +304,6 @@ export const getObligationUrlByCedula = (cedula) => apiRequest(`/obligation-urls
 export const getResultadoGestor = (cedula) => apiRequest(`/client-info/resultado-gestor/${cedula}`);
 export const getCompromisos = (cedula) => apiRequest(`/client-info/compromisos/${cedula}`);
 export const getObligaciones = (cedula) => apiRequest(`/client-info/obligaciones/${cedula}`);
+
+// --- Endpoints de Políticas de Condonación ---
+export const calculateCondonation = (obligation_ids) => apiRequest('/condonation-policies/calculate', 'POST', { obligation_ids });
