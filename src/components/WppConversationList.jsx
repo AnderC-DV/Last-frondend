@@ -1,19 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import WppWindowCounter from './WppWindowCounter';
-import { addTagToConversation, assignConversation } from '../services/api';
-
-// Simulación de llamadas a la API
-const markConversationAsReadAPI = async (conversationId) => {
-  console.log(`PUT /api/conversations/${conversationId}/read`);
-  await new Promise(resolve => setTimeout(resolve, 500)); // Simular latencia
-  return { success: true };
-};
-
-const markConversationAsUnreadAPI = async (conversationId) => {
-  console.log(`PUT /api/conversations/${conversationId}/unread`);
-  await new Promise(resolve => setTimeout(resolve, 500)); // Simular latencia
-  return { success: true };
-};
+import {
+  addTagToConversation,
+  assignConversation,
+  markConversationAsRead,
+  markConversationAsUnread
+} from '../services/api';
 
 const WppConversationList = ({ conversations, selectedConversation, onSelectConversation, userRole }) => {
   const [localConversations, setLocalConversations] = useState(conversations);
@@ -48,39 +40,18 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
     }
   };
 
-  const markConversationAsRead = async (conversationId) => {
-    try {
-      const response = await markConversationAsReadAPI(conversationId);
-      if (response.success) {
-        setLocalConversations(prevConvos =>
-          prevConvos.map(convo =>
-            convo.id === conversationId ? { ...convo, read_status: 'read' } : convo
-          )
-        );
-      }
-    } catch (error) {
-      console.error('Error al marcar la conversación como leída:', error);
-    }
-  };
-
-  const markConversationAsUnread = async (conversationId) => {
-    try {
-      const response = await markConversationAsUnreadAPI(conversationId);
-      if (response.success) {
-        setLocalConversations(prevConvos =>
-          prevConvos.map(convo =>
-            convo.id === conversationId ? { ...convo, read_status: 'sent' } : convo
-          )
-        );
-      }
-    } catch (error) {
-      console.error('Error al marcar la conversación como no leída:', error);
-    }
-  };
-
-  const handleConversationSelect = (convo) => {
+  const handleConversationClick = async (convo) => {
     if (convo.read_status === 'sent') {
-      markConversationAsRead(convo.id);
+      try {
+        await markConversationAsRead(convo.id);
+        setLocalConversations(prevConvos =>
+          prevConvos.map(c =>
+            c.id === convo.id ? { ...c, read_status: 'read' } : c
+          )
+        );
+      } catch (error) {
+        console.error('Error al marcar la conversación como leída:', error);
+      }
     }
     onSelectConversation(convo);
   };
@@ -99,9 +70,18 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
     setContextMenu({ ...contextMenu, visible: false });
   };
 
-  const handleMarkAsUnread = () => {
+  const handleMarkAsUnread = async () => {
     if (contextMenu.selectedConvo) {
-      markConversationAsUnread(contextMenu.selectedConvo.id);
+      try {
+        await markConversationAsUnread(contextMenu.selectedConvo.id);
+        setLocalConversations(prevConvos =>
+          prevConvos.map(c =>
+            c.id === contextMenu.selectedConvo.id ? { ...c, read_status: 'sent' } : c
+          )
+        );
+      } catch (error) {
+        console.error('Error al marcar la conversación como no leída:', error);
+      }
     }
     handleCloseContextMenu();
   };
@@ -126,7 +106,7 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
               className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
                 selectedConversation?.id === convo.id ? 'bg-green-50 border-r-4 border-green-500' : ''
               }`}
-              onClick={() => handleConversationSelect(convo)}
+              onClick={() => handleConversationClick(convo)}
               onContextMenu={(e) => handleContextMenu(e, convo)}
             >
               <div className="flex justify-between items-start mb-1">

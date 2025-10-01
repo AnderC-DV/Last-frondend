@@ -268,6 +268,8 @@ export const getConversationMessages = (conversationId, params = {}) => {
   return apiRequest(endpoint);
 };
 export const sendMessage = (conversationId, messageData) => apiRequest(`/conversations/${conversationId}/reply`, 'POST', messageData);
+export const markConversationAsRead = (conversationId) => apiRequest(`/conversations/${conversationId}/read`, 'PATCH');
+export const markConversationAsUnread = (conversationId) => apiRequest(`/conversations/${conversationId}/unread`, 'PATCH');
 // --- Endpoints de Respuesta Multimedia desde GCS ---
 export const sendAudioFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/audio-from-gcs`, 'POST', { storage_object: gcsUrl });
 export const sendDocumentFromGCS = (conversationId, gcsUrl, filename) => apiRequest(`/conversations/${conversationId}/reply/document-from-gcs`, 'POST', { storage_object: gcsUrl, filename });

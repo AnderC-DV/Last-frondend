@@ -237,11 +237,13 @@ const WhatsAppChatPage = () => {
         const convoIndex = prev.findIndex(c => c.id === newMessage.conversation_id);
         if (convoIndex === -1) return prev;
 
+        const isConversationSelected = selectedConversationRef.current?.id === newMessage.conversation_id;
+
         const updatedConvo = {
           ...prev[convoIndex],
           last_message_preview: newMessage.body || `[${newMessage.type}]`,
           last_client_message_at: newMessage.timestamp,
-          unread_count: (prev[convoIndex].unread_count || 0) + 1,
+          read_status: isConversationSelected ? 'read' : 'sent',
         };
 
         const newConversations = [...prev];
