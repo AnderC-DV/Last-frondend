@@ -4,7 +4,7 @@ const WppClientInfo = ({ selectedConversation, userRole }) => {
   const handleViewInAdminfo = () => {
     if (selectedConversation?.client_cedula) {
       // URL placeholder - reemplazar con la URL real de Adminfo
-      const adminfoUrl = `https://adminfo.com/client/${selectedConversation.client_cedula}`;
+      const adminfoUrl = `https://renovar.adminfo.com/admin/#/clientes/detail/${selectedConversation.client_cedula}`;
       window.open(adminfoUrl, '_blank');
     } else {
       alert('No hay cédula de cliente disponible');
