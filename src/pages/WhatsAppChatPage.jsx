@@ -163,13 +163,35 @@ const WhatsAppChatPage = () => {
   useEffect(() => {
     const fetchConversations = async () => {
       try {
-        const data = await getConversations();
-        const conversationsWithUnread = data.map(c => ({ ...c, unread_count: c.unread_count || 0 }));
-        const sortedData = conversationsWithUnread.sort((a, b) => {
+        const initialConversations = await getConversations();
+
+        // Enrich conversations with last message preview
+        const enrichedConversations = await Promise.all(
+          initialConversations.map(async (convo) => {
+            try {
+              const detailedConvo = await getConversation(convo.id, { limit: 1 });
+              const lastMessage = detailedConvo?.messages?.[0];
+              return {
+                ...convo,
+                last_message_preview: lastMessage?.body || 'Último mensaje',
+              };
+            } catch (error) {
+              console.error(`Error fetching details for conversation ${convo.id}:`, error);
+              // Return the original conversation if details fetch fails
+              return {
+                ...convo,
+                last_message_preview: 'Error al cargar mensaje',
+              };
+            }
+          })
+        );
+
+        const sortedData = enrichedConversations.sort((a, b) => {
           const timeA = a.last_client_message_at ? new Date(a.last_client_message_at) : new Date(0);
           const timeB = b.last_client_message_at ? new Date(b.last_client_message_at) : new Date(0);
           return timeB - timeA;
         });
+
         setConversations(sortedData);
       } catch (error) {
         console.error('Error fetching conversations:', error);
