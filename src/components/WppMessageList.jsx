@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import WppMessageContent from './WppMessageContent';
 import WppScrollToBottomButton from './WppScrollToBottomButton';
 
@@ -14,6 +14,12 @@ const WppMessageList = ({
   hasMoreMessages
 }) => {
   const messagesContainerRef = useRef(null);
+
+  useEffect(() => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  }, [messages, selectedConversation]);
 
   return (
     <div
