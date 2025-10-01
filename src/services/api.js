@@ -297,3 +297,10 @@ export const getMediaUrl = async (conversationId, messageId, retries = 3, initia
   }
 };
 export const addTagToConversation = (conversationId, tagName) => apiRequest(`/conversations/${conversationId}/tags`, 'POST', { name: tagName });
+
+export const getObligationUrlByCedula = (cedula) => apiRequest(`/obligation-urls/by-cedula/${cedula}`);
+
+// --- Endpoints de Información del Cliente ---
+export const getResultadoGestor = (cedula) => apiRequest(`/client-info/resultado-gestor/${cedula}`);
+export const getCompromisos = (cedula) => apiRequest(`/client-info/compromisos/${cedula}`);
+export const getObligaciones = (cedula) => apiRequest(`/client-info/obligaciones/${cedula}`);
