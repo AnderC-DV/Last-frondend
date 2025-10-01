@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import WppWindowCounter from './WppWindowCounter';
+import WppTagInputModal from './WppTagInputModal';
 import {
   addTagToConversation,
   assignConversation,
@@ -10,11 +11,84 @@ import {
 const WppConversationList = ({ conversations, selectedConversation, onSelectConversation, userRole }) => {
   const [localConversations, setLocalConversations] = useState(conversations);
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, selectedConvo: null });
+  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
+  const [taggingConversationId, setTaggingConversationId] = useState(null);
 
   useEffect(() => {
     setLocalConversations(conversations);
   }, [conversations]);
 
+  const handleAddTag = (conversationId) => {
+    setTaggingConversationId(conversationId);
+    setIsTagModalOpen(true);
+  };
+
+  const handleConfirmAddTag = async (tagName) => {
+    if (!taggingConversationId || !tagName) return;
+
+    try {
+      await addTagToConversation(taggingConversationId, tagName);
+      // For now, we reload to see the change. A better approach would be to update the state locally.
+      window.location.reload();
+    } catch (error) {
+      alert('Error al agregar etiqueta: ' + error.message);
+    } finally {
+      setIsTagModalOpen(false);
+      setTaggingConversationId(null);
+    }
+  };
+
+  const handleAssignConversation = async (conversationId) => {
+    const managerId = window.prompt('Ingrese el ID del gestor al que asignar la conversación:');
+    if (managerId && managerId.trim()) {
+      try {
+        await assignConversation(conversationId, managerId.trim());
+        alert('Conversación asignada exitosamente');
+        window.location.reload();
+      } catch (error) {
+        alert('Error al asignar conversación: ' + error.message);
+      }
+    }
+  };
+
+  const handleContextMenu = (event, convo) => {
+    event.preventDefault();
+    setContextMenu({
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      selectedConvo: convo,
+    });
+  };
+
+  const handleCloseContextMenu = () => {
+    setContextMenu({ ...contextMenu, visible: false });
+  };
+
+  const handleMarkAsUnread = async () => {
+    if (contextMenu.selectedConvo) {
+      try {
+        await markConversationAsUnread(contextMenu.selectedConvo.id);
+        setLocalConversations(prevConvos =>
+          prevConvos.map(c =>
+            c.id === contextMenu.selectedConvo.id ? { ...c, read_status: 'sent' } : c
+          )
+        );
+      } catch (error) {
+        console.error('Error al marcar la conversación como no leída:', error);
+      }
+    }
+    handleCloseContextMenu();
+  };
+
+  useEffect(() => {
+    if (contextMenu.visible) {
+      document.addEventListener('click', handleCloseContextMenu);
+      return () => {
+        document.removeEventListener('click', handleCloseContextMenu);
+      };
+    }
+  }, [contextMenu.visible]);
   // Restaurar función para manejar click en conversación
   const handleConversationClick = async (convo) => {
     if (convo.read_status === 'sent') {
@@ -130,6 +204,12 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
           </button>
         </div>
       )}
+
+      <WppTagInputModal
+        isOpen={isTagModalOpen}
+        onClose={() => setIsTagModalOpen(false)}
+        onSubmit={handleConfirmAddTag}
+      />
     </div>
   );
 }

@@ -435,7 +435,7 @@ const WhatsAppChatPage = () => {
     }
   };
   return (
-    <div className="flex h-full min-h-0 bg-gray-50 overflow-hidden">
+    <div className="flex h-full min-h-0 bg-transparent overflow-hidden" style={{background: 'transparent'}}>
       <WppConversationSidebar
         conversations={conversations}
         selectedConversation={selectedConversation}

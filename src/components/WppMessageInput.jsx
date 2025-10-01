@@ -1,4 +1,8 @@
+
 import React from 'react';
+
+// SVG y fondo igual al área de mensajes para continuidad perfecta
+const wppPattern = `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f3f4f6' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`;
 
 const WppMessageInput = ({
   newMessage,
@@ -10,13 +14,38 @@ const WppMessageInput = ({
   isUploadingMedia,
   selectedConversation
 }) => {
+  // Input bar más compacto
+  const inputBarClass = 'max-w-3xl mx-auto flex items-end gap-2 bg-white rounded-3xl shadow-lg border border-gray-200 px-4 py-1.5 relative transition-all focus-within:ring-2 focus-within:ring-green-400';
+
   return (
-    <div className="w-full bg-transparent px-0 py-3 flex-shrink-0">
-      <div className="max-w-3xl mx-auto flex items-end gap-2 bg-white rounded-3xl shadow-lg border border-gray-200 px-4 py-2 relative" style={{minHeight: '56px'}}>
+    <div
+      className="w-full bg-transparent px-0 py-2 flex-shrink-0 flex items-end justify-center"
+      style={{
+        backgroundImage: wppPattern,
+        backgroundColor: '#e5ddd5',
+        backgroundRepeat: 'repeat',
+        backgroundPosition: 'left bottom',
+        backgroundSize: '60px 60px',
+        minHeight: '0',
+        zIndex: 1
+      }}
+    >
+      <div
+        className={inputBarClass}
+        style={{
+          minHeight: '44px', // más bajo
+          background: 'white',
+          boxShadow: '0 2px 16px 0 rgba(0,0,0,0.08)',
+          border: '1px solid #e5e7eb'
+        }}
+      >
         {/* Botones de media */}
+        {/* ...existing code... */}
         <div className="flex items-center gap-1">
           {/* Imagen */}
+          {/* ...existing code... */}
           <div className="relative group">
+            {/* ...existing code... */}
             <label className="p-2 text-gray-500 hover:text-green-600 cursor-pointer transition flex items-center">
               <input type="file" accept="image/*" onChange={(e) => handleMediaFileSelect(e, 'image')} className="hidden" disabled={!selectedConversation} />
               {/* Heroicon Photograph */}
@@ -25,6 +54,7 @@ const WppMessageInput = ({
             <span className="absolute left-1/2 -translate-x-1/2 bottom-10 opacity-0 group-hover:opacity-100 pointer-events-none bg-gray-900 text-white text-xs rounded px-2 py-1 shadow transition-all z-20 whitespace-nowrap">Imagen</span>
           </div>
           {/* Video */}
+          {/* ...existing code... */}
           <div className="relative group">
             <label className="p-2 text-gray-500 hover:text-green-600 cursor-pointer transition flex items-center">
               <input type="file" accept="video/*" onChange={(e) => handleMediaFileSelect(e, 'video')} className="hidden" disabled={!selectedConversation} />
@@ -34,6 +64,7 @@ const WppMessageInput = ({
             <span className="absolute left-1/2 -translate-x-1/2 bottom-10 opacity-0 group-hover:opacity-100 pointer-events-none bg-gray-900 text-white text-xs rounded px-2 py-1 shadow transition-all z-20 whitespace-nowrap">Video</span>
           </div>
           {/* Audio */}
+          {/* ...existing code... */}
           <div className="relative group">
             <label className="p-2 text-gray-500 hover:text-green-600 cursor-pointer transition flex items-center">
               <input type="file" accept="audio/*" onChange={(e) => handleMediaFileSelect(e, 'audio')} className="hidden" disabled={!selectedConversation} />
@@ -43,6 +74,7 @@ const WppMessageInput = ({
             <span className="absolute left-1/2 -translate-x-1/2 bottom-10 opacity-0 group-hover:opacity-100 pointer-events-none bg-gray-900 text-white text-xs rounded px-2 py-1 shadow transition-all z-20 whitespace-nowrap">Audio</span>
           </div>
           {/* Documento */}
+          {/* ...existing code... */}
           <div className="relative group">
             <label className="p-2 text-gray-500 hover:text-green-600 cursor-pointer transition flex items-center">
               <input type="file" accept=".pdf,.doc,.docx,.txt" onChange={(e) => handleMediaFileSelect(e, 'document')} className="hidden" disabled={!selectedConversation} />
@@ -52,6 +84,7 @@ const WppMessageInput = ({
             <span className="absolute left-1/2 -translate-x-1/2 bottom-10 opacity-0 group-hover:opacity-100 pointer-events-none bg-gray-900 text-white text-xs rounded px-2 py-1 shadow transition-all z-20 whitespace-nowrap">Documento</span>
           </div>
           {/* Sticker */}
+          {/* ...existing code... */}
           <div className="relative group">
             <label className="p-2 text-gray-500 hover:text-green-600 cursor-pointer transition flex items-center">
               <input type="file" accept="image/*" onChange={(e) => handleMediaFileSelect(e, 'sticker')} className="hidden" disabled={!selectedConversation} />
@@ -66,7 +99,7 @@ const WppMessageInput = ({
         <input
           type="text"
           placeholder="Escribe un mensaje..."
-          className="flex-1 px-4 py-3 border-none outline-none bg-transparent text-gray-800 placeholder-gray-400 rounded-full focus:ring-0"
+          className="flex-1 px-4 py-2 border-none outline-none bg-transparent text-gray-800 placeholder-gray-400 rounded-full focus:ring-0"
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
