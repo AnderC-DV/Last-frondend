@@ -1,7 +1,36 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import WppConversationList from './WppConversationList';
 
 const WppConversationSidebar = ({ conversations, selectedConversation, onSelectConversation, userRole }) => {
+  const [activeFilter, setActiveFilter] = useState('Todos');
+
+  const filteredConversations = useMemo(() => {
+    const now = new Date();
+    const twentyFourHoursAgo = now.getTime() - (24 * 60 * 60 * 1000);
+
+    switch (activeFilter) {
+      case 'Nuevos':
+        // As per previous refactoring, 'sent' status indicates an unread conversation.
+        return conversations.filter(c => c.read_status === 'sent');
+      case 'Activos':
+        return conversations.filter(c => {
+          if (!c.last_client_message_at) return false;
+          const messageDate = new Date(c.last_client_message_at).getTime();
+          return messageDate > twentyFourHoursAgo;
+        });
+      case 'Todos':
+      default:
+        return conversations;
+    }
+  }, [conversations, activeFilter]);
+
+  const getButtonClass = (filterName) => {
+    if (activeFilter === filterName) {
+      return "px-3 py-1 text-sm font-medium text-green-600 bg-green-50 border border-green-300 rounded-full";
+    }
+    return "px-3 py-1 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-full hover:bg-gray-50";
+  };
+
   return (
     <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full min-h-0">
       <div className="p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
@@ -15,13 +44,13 @@ const WppConversationSidebar = ({ conversations, selectedConversation, onSelectC
         />
       </div>
       <div className="flex justify-around p-3 bg-gray-100 border-b border-gray-200 sticky top-[64px] z-10">
-        <button className="px-3 py-1 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-full hover:bg-gray-50">Nuevos</button>
-        <button className="px-3 py-1 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-full hover:bg-gray-50">Activos</button>
-        <button className="px-3 py-1 text-sm font-medium text-green-600 bg-green-50 border border-green-300 rounded-full">Todos</button>
+        <button className={getButtonClass('Nuevos')} onClick={() => setActiveFilter('Nuevos')}>Nuevos</button>
+        <button className={getButtonClass('Activos')} onClick={() => setActiveFilter('Activos')}>Activos</button>
+        <button className={getButtonClass('Todos')} onClick={() => setActiveFilter('Todos')}>Todos</button>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
         <WppConversationList
-          conversations={conversations}
+          conversations={filteredConversations}
           selectedConversation={selectedConversation}
           onSelectConversation={onSelectConversation}
           userRole={userRole}

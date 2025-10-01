@@ -15,31 +15,7 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
     setLocalConversations(conversations);
   }, [conversations]);
 
-  const handleAddTag = async (conversationId) => {
-    const tagName = window.prompt('Ingrese el nombre de la etiqueta:');
-    if (tagName && tagName.trim()) {
-      try {
-        await addTagToConversation(conversationId, tagName.trim());
-        window.location.reload();
-      } catch (error) {
-        alert('Error al agregar etiqueta: ' + error.message);
-      }
-    }
-  };
-
-  const handleAssignConversation = async (conversationId) => {
-    const managerId = window.prompt('Ingrese el ID del gestor al que asignar la conversación:');
-    if (managerId && managerId.trim()) {
-      try {
-        await assignConversation(conversationId, managerId.trim());
-        alert('Conversación asignada exitosamente');
-        window.location.reload();
-      } catch (error) {
-        alert('Error al asignar conversación: ' + error.message);
-      }
-    }
-  };
-
+  // Restaurar función para manejar click en conversación
   const handleConversationClick = async (convo) => {
     if (convo.read_status === 'sent') {
       try {
@@ -56,90 +32,52 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
     onSelectConversation(convo);
   };
 
-  const handleContextMenu = (event, convo) => {
-    event.preventDefault();
-    setContextMenu({
-      visible: true,
-      x: event.clientX,
-      y: event.clientY,
-      selectedConvo: convo,
-    });
-  };
-
-  const handleCloseContextMenu = () => {
-    setContextMenu({ ...contextMenu, visible: false });
-  };
-
-  const handleMarkAsUnread = async () => {
-    if (contextMenu.selectedConvo) {
-      try {
-        await markConversationAsUnread(contextMenu.selectedConvo.id);
-        setLocalConversations(prevConvos =>
-          prevConvos.map(c =>
-            c.id === contextMenu.selectedConvo.id ? { ...c, read_status: 'sent' } : c
-          )
-        );
-      } catch (error) {
-        console.error('Error al marcar la conversación como no leída:', error);
-      }
-    }
-    handleCloseContextMenu();
-  };
-
-  useEffect(() => {
-    if (contextMenu.visible) {
-      document.addEventListener('click', handleCloseContextMenu);
-      return () => {
-        document.removeEventListener('click', handleCloseContextMenu);
-      };
-    }
-  }, [contextMenu.visible]);
-
   return (
-    <div className="flex-1 overflow-y-auto">
-      <ul className="divide-y divide-gray-200">
+    <div className="flex-1 overflow-y-auto bg-gray-50 rounded-xl p-2">
+      <ul className="space-y-3">
         {localConversations.map((convo) => {
           const isUnread = convo.read_status === 'sent';
+          const isSelected = selectedConversation?.id === convo.id;
           return (
             <li
               key={convo.id}
-              className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
-                selectedConversation?.id === convo.id ? 'bg-green-50 border-r-4 border-green-500' : ''
+              className={`relative group shadow-sm rounded-2xl px-4 py-3 cursor-pointer transition-all border border-transparent ${
+                isSelected
+                  ? 'bg-white border-green-500 ring-2 ring-green-200'
+                  : 'bg-white hover:shadow-md hover:border-green-200'
               }`}
               onClick={() => handleConversationClick(convo)}
               onContextMenu={(e) => handleContextMenu(e, convo)}
             >
               <div className="flex justify-between items-start mb-1">
-                <h3 className={`font-semibold truncate ${isUnread ? 'text-gray-900 font-bold' : 'text-gray-600'}`}>{convo.customer_phone_number}</h3>
+                <h3 className={`font-semibold truncate text-base ${isUnread ? 'text-green-700 font-bold' : 'text-gray-700'}`}>{convo.customer_phone_number}</h3>
                 <div className="flex flex-col items-end ml-2 flex-shrink-0">
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-gray-400">
                     {convo.last_client_message_at ? new Date(convo.last_client_message_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
                   </span>
                   <WppWindowCounter lastClientMessageAt={convo.last_client_message_at} />
                 </div>
               </div>
-              <div className="flex items-center justify-between">
-                <p className={`text-sm truncate ${isUnread ? 'text-gray-800 font-bold' : 'text-gray-600'}`}>
-                  {convo.last_message_preview || 'Último mensaje'}
-                </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className={`text-sm truncate ${isUnread ? 'text-green-800 font-semibold' : 'text-gray-500'}`}>{convo.last_message_preview || 'Último mensaje'}</p>
                 {isUnread && (
-                  <span className="ml-2 flex-shrink-0 w-3 h-3 bg-green-500 rounded-full"></span>
+                  <span className="ml-2 flex-shrink-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white shadow"></span>
                 )}
               </div>
               {(userRole === 'coordinador' || userRole === 'gestor' || userRole === 'Admin') && (
-                <div className="flex items-center gap-1 ml-2 mt-2">
+                <div className="flex items-center flex-wrap gap-2 ml-1 mt-3">
                   {convo.tags && convo.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {convo.tags.slice(0, 2).map((tag) => (
                         <span
                           key={tag.id}
-                          className="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded-full"
+                          className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full font-medium border border-blue-200 shadow-sm"
                         >
                           {tag.name}
                         </span>
                       ))}
                       {convo.tags.length > 2 && (
-                        <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full border border-gray-200 font-medium shadow-sm">
                           +{convo.tags.length - 2}
                         </span>
                       )}
@@ -147,7 +85,7 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
                   )}
                   {userRole === 'coordinador' && !convo.assigned_to_id && (
                     <button
-                      className="text-xs bg-orange-200 hover:bg-orange-300 text-orange-600 rounded-full px-2 py-1"
+                      className="text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-full px-2 py-0.5 border border-orange-200 font-medium shadow-sm transition"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleAssignConversation(convo.id);
@@ -159,7 +97,7 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
                   )}
                   {(userRole === 'gestor' || userRole === 'Admin') && (
                     <button
-                      className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-600 rounded-full w-5 h-5 flex items-center justify-center"
+                      className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full w-6 h-6 flex items-center justify-center border border-gray-200 font-bold shadow-sm transition"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleAddTag(convo.id);
@@ -171,17 +109,21 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
                   )}
                 </div>
               )}
+              {/* Sombra y borde para el estado seleccionado */}
+              {isSelected && (
+                <span className="absolute top-2 right-2 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full border border-green-200 shadow-sm">Seleccionado</span>
+              )}
             </li>
           );
         })}
       </ul>
       {contextMenu.visible && (
         <div
-          className="absolute bg-white border border-gray-200 rounded-md shadow-lg py-1"
+          className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[180px]"
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
           <button
-            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded"
             onClick={handleMarkAsUnread}
           >
             Marcar como no leído
@@ -190,6 +132,6 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
       )}
     </div>
   );
-};
+}
 
 export default WppConversationList;
