@@ -21,6 +21,7 @@ const WhatsAppChatPage = () => {
   const [previewFileUrl, setPreviewFileUrl] = useState(null);
   const [selectedMediaFile, setSelectedMediaFile] = useState(null);
   const [mediaType, setMediaType] = useState('');
+  const [messagesCache, setMessagesCache] = useState({});
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
@@ -205,9 +206,17 @@ const WhatsAppChatPage = () => {
   useEffect(() => {
     if (selectedConversation) {
       const fetchMessages = async () => {
-        try {
+        const cachedMessages = messagesCache[selectedConversation.id];
+
+        if (cachedMessages) {
+          setMessages(cachedMessages);
+          setIsLoadingMessages(false);
+          setTimeout(() => scrollToBottom(), 100);
+        } else {
           setIsLoadingMessages(true);
-          // Resetear estados de paginación al cambiar de conversación
+        }
+
+        try {
           setHasMoreMessages(true);
           setOffset(0);
           setIsLoadingOlderMessages(false);
@@ -216,14 +225,40 @@ const WhatsAppChatPage = () => {
           const conversationData = await getConversation(selectedConversation.id, { limit: 20, offset: 0 });
 
           if (conversationData && conversationData.messages && Array.isArray(conversationData.messages)) {
-            const sortedMessages = conversationData.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-            setMessages(sortedMessages);
-            setTotalMessages(conversationData.total_messages || conversationData.messages.length);
+            const apiMessages = conversationData.messages;
+
+            setMessagesCache(prevCache => {
+              const cachedMsgs = prevCache[selectedConversation.id] || [];
+              const messageMap = new Map(cachedMsgs.map(m => [m.id || m.message_id, m]));
+
+              // Update map with API messages, but don't overwrite cached ones
+              apiMessages.forEach(apiMsg => {
+                const id = apiMsg.id || apiMsg.message_id;
+                if (!messageMap.has(id)) {
+                  messageMap.set(id, apiMsg);
+                }
+              });
+
+              const mergedMessages = Array.from(messageMap.values()).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+              
+              // Update the active messages state
+              setMessages(mergedMessages);
+
+              // Return the updated cache
+              return {
+                ...prevCache,
+                [selectedConversation.id]: mergedMessages
+              };
+            });
+
+            setTotalMessages(conversationData.total_messages || apiMessages.length);
             setHasMoreMessages(conversationData.has_more || false);
             setOffset(20);
 
-            setTimeout(() => scrollToBottom(), 100);
-          } else {
+            if (!cachedMessages) {
+              setTimeout(() => scrollToBottom(), 100);
+            }
+          } else if (!cachedMessages) {
             setMessages([]);
             setHasMoreMessages(false);
             setTotalMessages(0);
@@ -233,9 +268,11 @@ const WhatsAppChatPage = () => {
           if (error.message && !error.message.includes('CORS') && !error.message.includes('Failed to fetch')) {
             alert(`Error al cargar mensajes: ${error.message}`);
           }
-          setMessages([]);
-          setHasMoreMessages(false);
-          setTotalMessages(0);
+          if (!cachedMessages) {
+            setMessages([]);
+            setHasMoreMessages(false);
+            setTotalMessages(0);
+          }
         } finally {
           setIsLoadingMessages(false);
         }
@@ -273,6 +310,15 @@ const WhatsAppChatPage = () => {
         return [updatedConvo, ...newConversations];
       });
 
+      setMessagesCache(prevCache => {
+        const currentMessages = prevCache[newMessage.conversation_id] || [];
+        if (!currentMessages.some(msg => (msg.id || msg.message_id) === (newMessage.id || newMessage.message_id))) {
+          const updatedMessages = [...currentMessages, newMessage].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          return { ...prevCache, [newMessage.conversation_id]: updatedMessages };
+        }
+        return prevCache;
+      });
+
       if (selectedConversationRef.current?.id === newMessage.conversation_id) {
         setMessages(prevMessages => {
           if (!prevMessages.some(msg => (msg.id || msg.message_id) === (newMessage.id || newMessage.message_id))) {
@@ -288,9 +334,39 @@ const WhatsAppChatPage = () => {
       }
     };
 
-    const unsubscribe = subscribe('conversation.message.created', handleNewMessage);
+    const handleMessageUpdate = (updatedMessage) => {
+      setMessagesCache(prevCache => {
+        const currentMessages = prevCache[updatedMessage.conversation_id] || [];
+        const messageIndex = currentMessages.findIndex(msg => (msg.id || msg.message_id) === (updatedMessage.id || updatedMessage.message_id));
 
-    return () => unsubscribe();
+        if (messageIndex !== -1) {
+          const updatedMessages = [...currentMessages];
+          updatedMessages[messageIndex] = { ...updatedMessages[messageIndex], ...updatedMessage };
+          return { ...prevCache, [updatedMessage.conversation_id]: updatedMessages };
+        }
+        return prevCache;
+      });
+
+      if (selectedConversationRef.current?.id === updatedMessage.conversation_id) {
+        setMessages(prevMessages => {
+          const messageIndex = prevMessages.findIndex(msg => (msg.id || msg.message_id) === (updatedMessage.id || updatedMessage.message_id));
+          if (messageIndex !== -1) {
+            const updatedMessages = [...prevMessages];
+            updatedMessages[messageIndex] = { ...updatedMessages[messageIndex], ...updatedMessage };
+            return updatedMessages;
+          }
+          return prevMessages;
+        });
+      }
+    };
+
+    const unsubscribeCreated = subscribe('conversation.message.created', handleNewMessage);
+    const unsubscribeUpdated = subscribe('conversation.message.updated', handleMessageUpdate);
+
+    return () => {
+      unsubscribeCreated();
+      unsubscribeUpdated();
+    };
   }, [subscribe, scrollToBottom]);
 
   // Efecto para manejar el scroll del contenedor de mensajes
@@ -329,9 +405,23 @@ const WhatsAppChatPage = () => {
         type: 'text',
         text: { body: messageToSend },
       };
-      // We no longer process the response here. We just send and forget.
-      // The WebSocket event will be the source of truth.
-      await sendMessage(selectedConversation.id, messageData);
+      const sentMessage = await sendMessage(selectedConversation.id, messageData);
+
+      if (sentMessage && sentMessage.messages && sentMessage.messages.length > 0) {
+        const finalMessage = sentMessage.messages[0];
+        const updateMessageState = (prevMessages) =>
+          prevMessages.map(msg =>
+            msg.id === temporaryId
+              ? { ...msg, status: 'sent', message_id: finalMessage.id, id: finalMessage.id }
+              : msg
+          );
+
+        setMessages(updateMessageState);
+        setMessagesCache(prevCache => ({
+          ...prevCache,
+          [selectedConversation.id]: updateMessageState(prevCache[selectedConversation.id] || [])
+        }));
+      }
 
     } catch (error) {
       console.error('Error sending message:', error);

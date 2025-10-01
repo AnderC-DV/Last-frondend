@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import WppMessageContent from './WppMessageContent';
+import WppMessageStatus from './WppMessageStatus';
 import WppScrollToBottomButton from './WppScrollToBottomButton';
 
 const WppMessageList = ({
@@ -80,19 +81,26 @@ const WppMessageList = ({
                 conversationId={selectedConversation?.id}
                 onDocumentClick={onDocumentClick}
               />
-              <p className={`text-xs mt-1 ${isIncoming ? 'text-gray-500' : 'text-green-100'}`}>
-                {(() => {
-                  if (!msg.timestamp) return '';
-                  let date;
-                  if (isNaN(new Date(msg.timestamp).getTime())) {
-                    // If invalid as ISO, try as Unix seconds
-                    date = new Date(Number(msg.timestamp) * 1000);
-                  } else {
-                    date = new Date(msg.timestamp);
-                  }
-                  return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                })()}
-              </p>
+              <div className={`flex items-center justify-end text-xs mt-1 ${isIncoming ? 'text-gray-500' : 'text-green-100'}`}>
+                <span>
+                  {(() => {
+                    if (!msg.timestamp) return '';
+                    let date;
+                    if (isNaN(new Date(msg.timestamp).getTime())) {
+                      date = new Date(Number(msg.timestamp) * 1000);
+                    } else {
+                      date = new Date(msg.timestamp);
+                    }
+                    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  })()}
+                </span>
+                {!isIncoming && msg.status && (
+                  <WppMessageStatus
+                    status={msg.status.toLowerCase()}
+                    errorMessage={msg.error_message}
+                  />
+                )}
+              </div>
             </div>
           </div>
         );
