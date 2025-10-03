@@ -21,16 +21,14 @@ const useSound = (url) => {
 
   const init = () => {
     if (!audioRef.current.isInitialized) {
-      console.log('Attempting to initialize audio...');
       audioRef.current.audio.volume = 0;
       audioRef.current.audio.play().then(() => {
         audioRef.current.audio.pause();
         audioRef.current.audio.currentTime = 0;
         audioRef.current.audio.volume = 1;
         audioRef.current.isInitialized = true;
-        console.log('Audio initialized successfully.');
       }).catch(error => {
-        console.error("Audio initialization failed:", error);
+        console.warn("Audio initialization failed. This is expected if there was no user interaction yet.", error);
       });
     }
   };

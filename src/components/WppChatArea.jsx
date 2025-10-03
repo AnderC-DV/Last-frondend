@@ -25,11 +25,17 @@ const WppChatArea = ({
   onOpenExpiredSessionModal,
   selectedTemplate,
   selectedObligation,
-  onCancelTemplate
+  onCancelTemplate,
+  adminfoData,
+  handleViewInAdminfo
 }) => {
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-transparent" style={{background: 'transparent'}}>
-      <WppChatHeader selectedConversation={selectedConversation} />
+      <WppChatHeader
+        selectedConversation={selectedConversation}
+        adminfoData={adminfoData}
+        handleViewInAdminfo={handleViewInAdminfo}
+      />
 
       <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto">
         <WppMessageList

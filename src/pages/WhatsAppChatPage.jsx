@@ -31,6 +31,7 @@ const WhatsAppChatPage = () => {
   const [clientInfo, setClientInfo] = useState(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
+  const [adminfoData, setAdminfoData] = useState({ url: null, loading: false });
 
   const [isSessionExpired, setIsSessionExpired] = useState(false);
   const [isExpiredSessionModalOpen, setIsExpiredSessionModalOpen] = useState(false);
@@ -81,7 +82,6 @@ const WhatsAppChatPage = () => {
   // Efecto para inicializar el audio en la primera interacción del usuario
   useEffect(() => {
     const handleFirstInteraction = () => {
-      console.log('User interaction detected, initializing sound...');
       initNotificationSound();
     };
 
@@ -325,7 +325,6 @@ const WhatsAppChatPage = () => {
   // Memoized WebSocket message handler
   useEffect(() => {
     const handleNewMessage = (newMessage) => {
-      console.log('Nuevo mensaje recibido del socket:', newMessage);
       // Reproducir sonido solo para mensajes entrantes
       if (newMessage.direction === 'inbound') {
         playNotificationSound();
@@ -493,6 +492,14 @@ const WhatsAppChatPage = () => {
     }
   };
 
+  const handleViewInAdminfo = () => {
+    if (adminfoData.url) {
+      window.open(adminfoData.url, '_blank');
+    } else {
+      toast.error('La URL de Adminfo no está disponible para este cliente.');
+    }
+  };
+
   const handleMediaFileSelect = (event, type) => {
     const file = event.target.files[0];
     if (file) {
@@ -615,10 +622,17 @@ const WhatsAppChatPage = () => {
         onOpenExpiredSessionModal={() => setIsExpiredSessionModalOpen(true)}
         selectedTemplate={selectedTemplate}
         onCancelTemplate={() => setSelectedTemplate(null)}
+        adminfoData={adminfoData}
+        handleViewInAdminfo={handleViewInAdminfo}
       />
 
       {userRole !== 'administrador' && (
-        <WppClientInfo selectedConversation={selectedConversation} userRole={userRole} setClientInfo={setClientInfo} />
+        <WppClientInfo
+          selectedConversation={selectedConversation}
+          userRole={userRole}
+          setClientInfo={setClientInfo}
+          onAdminfoUrlChange={setAdminfoData}
+        />
       )}
 
       <DocumentPreviewModal fileUrl={previewFileUrl} onClose={() => setPreviewFileUrl(null)} />

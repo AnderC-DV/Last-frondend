@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { getResultadoGestor, getCompromisos, getObligaciones, getObligationUrlByCedula, calculateCondonation } from '../services/api';
 
@@ -44,7 +44,7 @@ const Tooltip = ({ targetRef, content }) => {
 };
 
 
-const WppClientInfo = ({ selectedConversation, userRole, setClientInfo: setParentClientInfo }) => {
+const WppClientInfo = ({ selectedConversation, userRole, setClientInfo: setParentClientInfo, onAdminfoUrlChange }) => {
   const [clientInfo, setClientInfo] = useState({
     resultadoGestor: null,
     compromisos: [],
@@ -52,8 +52,6 @@ const WppClientInfo = ({ selectedConversation, userRole, setClientInfo: setParen
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [adminfoUrl, setAdminfoUrl] = useState(null);
-  const [isLoadingUrl, setIsLoadingUrl] = useState(false);
   const [selectedObligations, setSelectedObligations] = useState([]);
   const [condonationResult, setCondonationResult] = useState(null);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -62,63 +60,59 @@ const WppClientInfo = ({ selectedConversation, userRole, setClientInfo: setParen
   const infoIconRef = useRef(null);
   const scrollContainerRef = useRef(null);
 
+  const fetchClientInfo = useCallback(async () => {
+    if (selectedConversation?.client_cedula) {
+      setLoading(true);
+      setError(null);
+      setClientInfo({
+        resultadoGestor: null,
+        compromisos: [],
+        obligaciones: { total_obligaciones: 0, obligaciones: [] },
+      });
+      setSelectedObligations([]);
+      setCondonationResult(null);
+      setPortfolioFilter('all');
+      try {
+        const [resultadoGestorRes, compromisosRes, obligacionesRes] = await Promise.all([
+          getResultadoGestor(selectedConversation.client_cedula),
+          getCompromisos(selectedConversation.client_cedula),
+          getObligaciones(selectedConversation.client_cedula),
+        ]);
+        const info = {
+          resultadoGestor: resultadoGestorRes.resultado_gestor,
+          compromisos: compromisosRes.compromisos,
+          obligaciones: obligacionesRes,
+        };
+        setClientInfo(info);
+        setParentClientInfo(info);
+      } catch (err) {
+        setError('Error al cargar la información del cliente.');
+        console.error("Error fetching client info:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+  }, [selectedConversation?.client_cedula, setParentClientInfo]);
+
+  const fetchAdminfoUrl = useCallback(async () => {
+    if (selectedConversation?.client_cedula) {
+      onAdminfoUrlChange({ loading: true, url: null });
+      try {
+        const response = await getObligationUrlByCedula(selectedConversation.client_cedula);
+        onAdminfoUrlChange({ loading: false, url: response?.url || null });
+      } catch (error) {
+        console.error("Error fetching Adminfo URL:", error);
+        onAdminfoUrlChange({ loading: false, url: null });
+      }
+    } else {
+      onAdminfoUrlChange({ loading: false, url: null });
+    }
+  }, [selectedConversation?.client_cedula, onAdminfoUrlChange]);
+
   useEffect(() => {
-    const fetchClientInfo = async () => {
-      if (selectedConversation?.client_cedula) {
-        setLoading(true);
-        setError(null);
-        setClientInfo({
-          resultadoGestor: null,
-          compromisos: [],
-          obligaciones: { total_obligaciones: 0, obligaciones: [] },
-        });
-        setSelectedObligations([]);
-        setCondonationResult(null);
-        setPortfolioFilter('all');
-        try {
-          const [resultadoGestorRes, compromisosRes, obligacionesRes] = await Promise.all([
-            getResultadoGestor(selectedConversation.client_cedula),
-            getCompromisos(selectedConversation.client_cedula),
-            getObligaciones(selectedConversation.client_cedula),
-          ]);
-          const info = {
-            resultadoGestor: resultadoGestorRes.resultado_gestor,
-            compromisos: compromisosRes.compromisos,
-            obligaciones: obligacionesRes,
-          };
-          setClientInfo(info);
-          setParentClientInfo(info);
-        } catch (err) {
-          setError('Error al cargar la información del cliente.');
-          console.error("Error fetching client info:", err);
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-
-    const fetchAdminfoUrl = async () => {
-      if (selectedConversation?.client_cedula) {
-        setIsLoadingUrl(true);
-        setAdminfoUrl(null);
-        try {
-          const response = await getObligationUrlByCedula(selectedConversation.client_cedula);
-          if (response?.url) {
-            setAdminfoUrl(response.url);
-          }
-        } catch (error) {
-          console.error("Error fetching Adminfo URL:", error);
-        } finally {
-          setIsLoadingUrl(false);
-        }
-      } else {
-        setAdminfoUrl(null);
-      }
-    };
-
     fetchClientInfo();
     fetchAdminfoUrl();
-  }, [selectedConversation]);
+  }, [fetchClientInfo, fetchAdminfoUrl]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -164,13 +158,6 @@ const WppClientInfo = ({ selectedConversation, userRole, setClientInfo: setParen
   }, [portfolioFilter, selectedObligations, clientInfo.obligaciones]);
 
 
-  const handleViewInAdminfo = () => {
-    if (adminfoUrl) {
-      window.open(adminfoUrl, '_blank');
-    } else {
-      alert('La URL de Adminfo no está disponible para este cliente.');
-    }
-  };
 
   const formatCurrency = (value) => {
     if (typeof value !== 'number') return value;
@@ -359,18 +346,6 @@ const WppClientInfo = ({ selectedConversation, userRole, setClientInfo: setParen
                 <p className="text-gray-700">No hay obligaciones para calcular.</p>
               )}
             </div>
-            {(userRole === 'gestor' || userRole === 'Admin') && (
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-lg mb-2 text-gray-800">Herramientas Internas</h3>
-                <button
-                  onClick={handleViewInAdminfo}
-                  disabled={!adminfoUrl || isLoadingUrl}
-                  className="w-full px-3 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isLoadingUrl ? 'Cargando...' : '👁️ Ver en Adminfo'}
-                </button>
-              </div>
-            )}
           </>
         )}
       </div>

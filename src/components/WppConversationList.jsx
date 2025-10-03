@@ -124,7 +124,10 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
               onContextMenu={(e) => handleContextMenu(e, convo)}
             >
               <div className="flex justify-between items-start mb-1">
-                <h3 className={`font-semibold truncate text-base ${isUnread ? 'text-green-700 font-bold' : 'text-gray-700'}`}>{convo.customer_phone_number}</h3>
+                <div className="flex-1 min-w-0">
+                  <h3 className={`font-semibold truncate text-base ${isUnread ? 'text-green-700 font-bold' : 'text-gray-700'}`}>{convo.chat_title}</h3>
+                  <p className={`text-sm truncate ${isUnread ? 'text-green-800' : 'text-gray-500'}`}>{convo.customer_phone_number}</p>
+                </div>
                 <div className="flex flex-col items-end ml-2 flex-shrink-0">
                   <span className="text-xs text-gray-400">
                     {convo.last_client_message_at ? new Date(convo.last_client_message_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
