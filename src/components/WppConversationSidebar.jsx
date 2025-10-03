@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import WppConversationList from './WppConversationList';
+import InitiateConversationModal from './InitiateConversationModal';
 
-const WppConversationSidebar = ({ conversations, selectedConversation, onSelectConversation, userRole }) => {
+const WppConversationSidebar = ({ conversations, selectedConversation, onSelectConversation, userRole, onConversationInitiated }) => {
   const [activeFilter, setActiveFilter] = useState('Todos');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const filteredConversations = useMemo(() => {
     const now = new Date();
@@ -33,9 +35,23 @@ const WppConversationSidebar = ({ conversations, selectedConversation, onSelectC
 
   return (
     <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full min-h-0">
-      <div className="p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
+      <div className="p-4 border-b border-gray-200 bg-white sticky top-0 z-10 flex justify-between items-center">
         <h2 className="text-xl font-semibold text-gray-800">Conversaciones</h2>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="p-2 rounded-full hover:bg-gray-200"
+          title="Iniciar nueva conversación"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
       </div>
+      <InitiateConversationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConversationInitiated={onConversationInitiated}
+      />
       <div className="p-3 bg-gray-50 border-b border-gray-200 sticky top-[64px] z-10">
         <input
           type="text"

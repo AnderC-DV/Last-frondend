@@ -246,7 +246,7 @@ const WppClientInfo = ({ selectedConversation, userRole }) => {
   };
 
   return (
-    <div className="w-80 bg-white border-l border-gray-200 flex flex-col h-full min-h-0">
+    <div className="w-100 bg-white border-l border-gray-200 flex flex-col h-full min-h-0">
       <div className="p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
         <h2 className="text-xl font-semibold text-gray-800">Información del Cliente</h2>
       </div>
