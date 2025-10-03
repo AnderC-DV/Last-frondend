@@ -241,7 +241,18 @@ export const getSignedUploadForMedia = (conversation_id, content_type, kind, ori
   apiRequest('/conversations/signed-upload', 'POST', { conversation_id, content_type, kind, original_filename });
 
 // --- Endpoints de Conversaciones ---
-export const getConversations = () => apiRequest('/conversations/');
+export const getConversations = (params = {}) => {
+  const queryParams = new URLSearchParams();
+  if (params.limit) queryParams.append('limit', params.limit);
+  if (params.offset) queryParams.append('offset', params.offset);
+
+  const queryString = queryParams.toString();
+  const endpoint = queryString
+    ? `/conversations/?${queryString}`
+    : '/conversations/';
+
+  return apiRequest(endpoint);
+};
 export const assignConversation = (conversationId, userId) => apiRequest(`/conversations/${conversationId}/assign/${userId}`, 'POST');
 export const getConversation = (conversationId, params = {}) => {
   const queryParams = new URLSearchParams();

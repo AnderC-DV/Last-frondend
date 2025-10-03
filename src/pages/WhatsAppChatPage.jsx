@@ -170,7 +170,7 @@ const WhatsAppChatPage = () => {
 
   const fetchConversations = useCallback(async () => {
     try {
-      const initialConversations = await getConversations();
+      const initialConversations = await getConversations({ limit: 300 });
 
       // Enrich conversations with last message preview
       const enrichedConversations = await Promise.all(
