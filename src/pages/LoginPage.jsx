@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import loginBgImage from '../assets/logo renovar_Nuevo.svg';
+import loginBgImage from '../assets/LogoAT.png';
 import loginIllustration from '../assets/ilustracion-login.png';
 
 const LoginPage = () => {
@@ -96,7 +96,7 @@ const LoginPage = () => {
           <div className="flex flex-col items-center mb-4">
             <img src={loginBgImage} alt="Logo AuraTech" className="w-35 h-35 object-contain mb-1" />
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Bienvenido a AuraTech</h1>
-            <p className="text-gray-600">El corazon de Renovar Financiera</p>
+            <p className="text-gray-600">El corazon de tu compañia</p>
           </div>
           {logoutReason === 'inactivity' && (
             <div className="mb-4 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs text-center">
@@ -151,7 +151,7 @@ const LoginPage = () => {
           {error && <div className="mt-4 text-red-600 text-sm text-center">{error}</div>}
 
           <p className="mt-6 text-center text-xs text-gray-500">
-            © {new Date().getFullYear()} AuraTech - Renovar Financiera. Todos los derechos reservados.
+            © {new Date().getFullYear()} AuraTech. Todos los derechos reservados.
           </p>
         </div>
       </div>

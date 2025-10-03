@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import logo from '../assets/logos renovar_Mesa vertic_fondoblanco.svg';
+import logo from '../assets/LogoAT.png';
 import NotificationIcon from './NotificationIcon';
 
 // --- Iconos para el menú de usuario ---
@@ -76,7 +76,7 @@ const Header = ({ onOpenChangePassword }) => {
     <header className="bg-white shadow-md p-3 flex justify-between items-center sticky top-0 z-50 bg-opacity-95 backdrop-blur-sm border-b border-gray-100">
       <NavLink to="/" className="flex items-center">
         <img src={logo} alt="Logo Renovar" className="h-12 w-auto" />
-        <span className="text-2xl font-semibold bg-gradient-to-r from-[#6558a1] to-[#e8437f] text-transparent bg-clip-text ml-2">
+        <span className="text-2xl font-semibold bg-gradient-to-r from-[#00AEEF] to-[#8B8B8B] text-transparent bg-clip-text ml-2">
           AuraTech
         </span>
       </NavLink>
