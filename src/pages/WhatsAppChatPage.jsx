@@ -7,6 +7,7 @@ import WppChatArea from '../components/WppChatArea';
 import WppClientInfo from '../components/WppClientInfo';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
+import useSound from '../hooks/useSound';
 import { toast } from 'sonner';
 
 
@@ -14,6 +15,7 @@ const WhatsAppChatPage = () => {
   const { subscribe } = useNotifications();
   const { user, logout } = useAuth();
   const userRole = user?.decoded?.role || 'gestor'; // Default to gestor if not set
+  const { play: playNotificationSound, init: initNotificationSound } = useSound('/new-notificationWpp.mp3');
 
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
@@ -75,6 +77,24 @@ const WhatsAppChatPage = () => {
       delete window.debugPaginationState;
     };
   }, [debugPaginationState]);
+
+  // Efecto para inicializar el audio en la primera interacción del usuario
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      console.log('User interaction detected, initializing sound...');
+      initNotificationSound();
+    };
+
+    // Usamos { once: true } para que el listener se elimine automáticamente después de ejecutarse una vez.
+    window.addEventListener('click', handleFirstInteraction, { once: true });
+    window.addEventListener('keydown', handleFirstInteraction, { once: true });
+
+    return () => {
+      // Aunque { once: true } los elimina, es buena práctica limpiarlos en el cleanup por si el componente se desmonta antes.
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+    };
+  }, [initNotificationSound]);
 
   // Definir funciones antes de usarlas en useEffect
   const scrollToBottom = useCallback(() => {
@@ -305,6 +325,12 @@ const WhatsAppChatPage = () => {
   // Memoized WebSocket message handler
   useEffect(() => {
     const handleNewMessage = (newMessage) => {
+      console.log('Nuevo mensaje recibido del socket:', newMessage);
+      // Reproducir sonido solo para mensajes entrantes
+      if (newMessage.direction === 'inbound') {
+        playNotificationSound();
+      }
+
       setConversations(prev => {
         const convoIndex = prev.findIndex(c => c.id === newMessage.conversation_id);
         if (convoIndex === -1) return prev;
@@ -559,7 +585,10 @@ const WhatsAppChatPage = () => {
       <WppConversationSidebar
         conversations={conversations}
         selectedConversation={selectedConversation}
-        onSelectConversation={setSelectedConversation}
+        onSelectConversation={(convo) => {
+          initNotificationSound(); // Aseguramos la inicialización también al seleccionar una conversación
+          setSelectedConversation(convo);
+        }}
         userRole={userRole}
         onConversationInitiated={fetchConversations}
       />
