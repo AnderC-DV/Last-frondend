@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { getConversations, sendMessage, getConversation, BASE_URL } from '../services/api';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
+import ExpiredSessionModal from '../components/ExpiredSessionModal';
 import WppConversationSidebar from '../components/WppConversationSidebar';
 import WppChatArea from '../components/WppChatArea';
 import WppClientInfo from '../components/WppClientInfo';
@@ -23,8 +24,14 @@ const WhatsAppChatPage = () => {
   const [mediaType, setMediaType] = useState('');
   const [messagesCache, setMessagesCache] = useState({});
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [selectedObligation, setSelectedObligation] = useState(null);
+  const [clientInfo, setClientInfo] = useState(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
+
+  const [isSessionExpired, setIsSessionExpired] = useState(false);
+  const [isExpiredSessionModalOpen, setIsExpiredSessionModalOpen] = useState(false);
 
   // Estados para paginación
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -205,6 +212,12 @@ const WhatsAppChatPage = () => {
   // Efecto para cargar los mensajes iniciales de una conversación
   useEffect(() => {
     if (selectedConversation) {
+      const now = new Date();
+      const lastMessageTime = new Date(selectedConversation.last_client_message_at);
+      const diff = now - lastMessageTime;
+      const hours = diff / (1000 * 60 * 60);
+      setIsSessionExpired(hours > 24);
+
       const fetchMessages = async () => {
         const cachedMessages = messagesCache[selectedConversation.id];
 
@@ -379,60 +392,77 @@ const WhatsAppChatPage = () => {
   }, [handleScroll]);
 
   const handleSendMessage = async () => {
-    if (newMessage.trim() === '' || !selectedConversation) return;
-
-    const temporaryId = -Date.now();
-    const optimisticMessage = {
-      id: temporaryId,
-      message_id: `temp_${Date.now()}`,
-      body: newMessage,
-      timestamp: new Date().toISOString(),
-      from_phone_number: 'me',
-      message_type: 'text',
-      status: 'pending',
-    };
-
-    setMessages(prevMessages => [...prevMessages, optimisticMessage]);
-    const messageToSend = newMessage;
-    setNewMessage('');
-    setTimeout(scrollToBottom, 100);
-
-    try {
-      const messageData = {
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: selectedConversation.customer_phone_number,
-        type: 'text',
-        text: { body: messageToSend },
-      };
-      const sentMessage = await sendMessage(selectedConversation.id, messageData);
-
-      if (sentMessage && sentMessage.messages && sentMessage.messages.length > 0) {
-        const finalMessage = sentMessage.messages[0];
-        const updateMessageState = (prevMessages) =>
-          prevMessages.map(msg =>
-            msg.id === temporaryId
-              ? { ...msg, status: 'sent', message_id: finalMessage.id, id: finalMessage.id }
-              : msg
-          );
-
-        setMessages(updateMessageState);
-        setMessagesCache(prevCache => ({
-          ...prevCache,
-          [selectedConversation.id]: updateMessageState(prevCache[selectedConversation.id] || [])
-        }));
+    if (selectedTemplate) {
+      if (!selectedConversation || !selectedObligation) return;
+      try {
+        await sendTemplatedMessage({
+          template_id: selectedTemplate.id,
+          phone_number: selectedConversation.customer_phone_number,
+          cedula: selectedConversation.client_cedula,
+          obligacion: selectedObligation,
+        });
+        setSelectedTemplate(null);
+        setSelectedObligation(null);
+        fetchConversations();
+      } catch (error) {
+        console.error('Error sending template message:', error);
+        alert('Error al enviar la plantilla: ' + error.message);
       }
+    } else {
+      if (newMessage.trim() === '' || !selectedConversation) return;
 
-    } catch (error) {
-      console.error('Error sending message:', error);
-      // If the API call fails (e.g., network error), mark the message as failed
-      setMessages(prevMessages =>
-        prevMessages.map(msg =>
-          msg.id === temporaryId ? { ...msg, status: 'failed' } : msg
-        )
-      );
-      if (error.message && !error.message.includes('CORS') && !error.message.includes('Failed to fetch')) {
-        alert('Error al enviar el mensaje: ' + error.message);
+      const temporaryId = -Date.now();
+      const optimisticMessage = {
+        id: temporaryId,
+        message_id: `temp_${Date.now()}`,
+        body: newMessage,
+        timestamp: new Date().toISOString(),
+        from_phone_number: 'me',
+        message_type: 'text',
+        status: 'pending',
+      };
+
+      setMessages(prevMessages => [...prevMessages, optimisticMessage]);
+      const messageToSend = newMessage;
+      setNewMessage('');
+      setTimeout(scrollToBottom, 100);
+
+      try {
+        const messageData = {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: selectedConversation.customer_phone_number,
+          type: 'text',
+          text: { body: messageToSend },
+        };
+        const sentMessage = await sendMessage(selectedConversation.id, messageData);
+
+        if (sentMessage && sentMessage.messages && sentMessage.messages.length > 0) {
+          const finalMessage = sentMessage.messages[0];
+          const updateMessageState = (prevMessages) =>
+            prevMessages.map(msg =>
+              msg.id === temporaryId
+                ? { ...msg, status: 'sent', message_id: finalMessage.id, id: finalMessage.id }
+                : msg
+            );
+
+          setMessages(updateMessageState);
+          setMessagesCache(prevCache => ({
+            ...prevCache,
+            [selectedConversation.id]: updateMessageState(prevCache[selectedConversation.id] || [])
+          }));
+        }
+
+      } catch (error) {
+        console.error('Error sending message:', error);
+        setMessages(prevMessages =>
+          prevMessages.map(msg =>
+            msg.id === temporaryId ? { ...msg, status: 'failed' } : msg
+          )
+        );
+        if (error.message && !error.message.includes('CORS') && !error.message.includes('Failed to fetch')) {
+          alert('Error al enviar el mensaje: ' + error.message);
+        }
       }
     }
   };
@@ -552,13 +582,26 @@ const WhatsAppChatPage = () => {
         isLoadingMessages={isLoadingMessages}
         isLoadingOlderMessages={isLoadingOlderMessages}
         hasMoreMessages={hasMoreMessages}
+        isSessionExpired={isSessionExpired}
+        onOpenExpiredSessionModal={() => setIsExpiredSessionModalOpen(true)}
+        selectedTemplate={selectedTemplate}
+        onCancelTemplate={() => setSelectedTemplate(null)}
       />
 
       {userRole !== 'administrador' && (
-        <WppClientInfo selectedConversation={selectedConversation} userRole={userRole} />
+        <WppClientInfo selectedConversation={selectedConversation} userRole={userRole} setClientInfo={setClientInfo} />
       )}
 
       <DocumentPreviewModal fileUrl={previewFileUrl} onClose={() => setPreviewFileUrl(null)} />
+      <ExpiredSessionModal
+        isOpen={isExpiredSessionModalOpen}
+        onClose={() => setIsExpiredSessionModalOpen(false)}
+        onConversationInitiated={fetchConversations}
+        conversation={selectedConversation}
+        clientInfo={clientInfo}
+        onTemplateSelect={setSelectedTemplate}
+        onObligationSelect={setSelectedObligation}
+      />
     </div>
   );
 };

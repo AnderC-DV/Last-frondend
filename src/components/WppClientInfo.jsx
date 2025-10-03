@@ -44,7 +44,7 @@ const Tooltip = ({ targetRef, content }) => {
 };
 
 
-const WppClientInfo = ({ selectedConversation, userRole }) => {
+const WppClientInfo = ({ selectedConversation, userRole, setClientInfo: setParentClientInfo }) => {
   const [clientInfo, setClientInfo] = useState({
     resultadoGestor: null,
     compromisos: [],
@@ -81,11 +81,13 @@ const WppClientInfo = ({ selectedConversation, userRole }) => {
             getCompromisos(selectedConversation.client_cedula),
             getObligaciones(selectedConversation.client_cedula),
           ]);
-          setClientInfo({
+          const info = {
             resultadoGestor: resultadoGestorRes.resultado_gestor,
             compromisos: compromisosRes.compromisos,
             obligaciones: obligacionesRes,
-          });
+          };
+          setClientInfo(info);
+          setParentClientInfo(info);
         } catch (err) {
           setError('Error al cargar la información del cliente.');
           console.error("Error fetching client info:", err);

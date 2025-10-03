@@ -20,7 +20,12 @@ const WppChatArea = ({
   scrollToBottom,
   isLoadingMessages,
   isLoadingOlderMessages,
-  hasMoreMessages
+  hasMoreMessages,
+  isSessionExpired,
+  onOpenExpiredSessionModal,
+  selectedTemplate,
+  selectedObligation,
+  onCancelTemplate
 }) => {
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-transparent" style={{background: 'transparent'}}>
@@ -49,6 +54,11 @@ const WppChatArea = ({
         handleSendMedia={handleSendMedia}
         isUploadingMedia={isUploadingMedia}
         selectedConversation={selectedConversation}
+        isSessionExpired={isSessionExpired}
+        onOpenExpiredSessionModal={onOpenExpiredSessionModal}
+        selectedTemplate={selectedTemplate}
+        selectedObligation={selectedObligation}
+        onCancelTemplate={onCancelTemplate}
       />
     </div>
   );
