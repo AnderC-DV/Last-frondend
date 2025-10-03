@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 
 const wppPattern = `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f3f4f6' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`;
 
@@ -18,6 +18,21 @@ const WppMessageInput = ({
   onCancelTemplate
 }) => {
   const inputBarClass = 'max-w-3xl mx-auto flex items-end gap-2 bg-white rounded-3xl shadow-lg border border-gray-200 px-4 py-1.5 relative transition-all focus-within:ring-2 focus-within:ring-green-400';
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [newMessage]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
 
   const renderContent = () => {
     if (isSessionExpired && selectedTemplate) {
@@ -91,14 +106,16 @@ const WppMessageInput = ({
             <span className="absolute left-1/2 -translate-x-1/2 bottom-10 opacity-0 group-hover:opacity-100 pointer-events-none bg-gray-900 text-white text-xs rounded px-2 py-1 shadow transition-all z-20 whitespace-nowrap">Sticker</span>
           </div>
         </div>
-        <input
-          type="text"
+        <textarea
+          ref={textareaRef}
           placeholder="Escribe un mensaje..."
-          className="flex-1 px-4 py-2 border-none outline-none bg-transparent text-gray-800 placeholder-gray-400 rounded-full focus:ring-0"
+          className="flex-1 px-4 py-2 border-none outline-none bg-transparent text-gray-800 placeholder-gray-400 rounded-full focus:ring-0 resize-none overflow-y-hidden"
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+          onKeyDown={handleKeyDown}
           disabled={!selectedConversation}
+          rows={1}
+          style={{ maxHeight: '120px' }}
         />
         <button
           className={`ml-2 px-5 py-2 rounded-full font-semibold text-base shadow transition-colors ${selectedConversation && newMessage.trim() ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}

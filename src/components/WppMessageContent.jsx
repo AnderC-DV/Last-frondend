@@ -187,14 +187,14 @@ const WppMessageContent = ({
         return mediaUrl ? (
           <div>
             <img src={mediaUrl} alt="Imagen" className="max-w-xs rounded-lg" onError={() => setHasError(true)} />
-            {messageBody && <p className="text-sm leading-relaxed mt-1">{messageBody}</p>}
+            {messageBody && <p className="text-sm leading-relaxed mt-1 whitespace-pre-wrap">{messageBody}</p>}
           </div>
         ) : <p className="text-gray-500 italic">Imagen no disponible</p>;
       case 'video':
         return mediaUrl ? (
           <div>
             <video src={mediaUrl} controls className="max-w-xs rounded-lg" onError={() => setHasError(true)} />
-            {messageBody && <p className="text-sm leading-relaxed mt-1">{messageBody}</p>}
+            {messageBody && <p className="text-sm leading-relaxed mt-1 whitespace-pre-wrap">{messageBody}</p>}
           </div>
         ) : <p className="text-gray-500 italic">Video no disponible</p>;
       case 'audio':
@@ -208,9 +208,9 @@ const WppMessageContent = ({
       case 'sticker':
         return mediaUrl ? <img src={mediaUrl} alt="Sticker" className="w-24 h-24" onError={() => setHasError(true)} /> : <p className="text-gray-500 italic">Sticker no disponible</p>;
       case 'text':
-        return <p className="text-sm leading-relaxed">{messageBody}</p>;
+        return <p className="text-sm leading-relaxed whitespace-pre-wrap">{messageBody}</p>;
       default:
-        return <p className="text-sm leading-relaxed">{messageBody || '[Mensaje no soportado]'}</p>;
+        return <p className="text-sm leading-relaxed whitespace-pre-wrap">{messageBody || '[Mensaje no soportado]'}</p>;
     }
   };
 
