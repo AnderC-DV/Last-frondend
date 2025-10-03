@@ -5,26 +5,47 @@ import InitiateConversationModal from './InitiateConversationModal';
 const WppConversationSidebar = ({ conversations, selectedConversation, onSelectConversation, userRole, onConversationInitiated }) => {
   const [activeFilter, setActiveFilter] = useState('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const filteredConversations = useMemo(() => {
+    let filtered = conversations;
+
+    // Primero, aplicar el filtro por estado (Nuevos, Activos, Todos)
     const now = new Date();
     const twentyFourHoursAgo = now.getTime() - (24 * 60 * 60 * 1000);
 
     switch (activeFilter) {
       case 'Nuevos':
-        // As per previous refactoring, 'sent' status indicates an unread conversation.
-        return conversations.filter(c => c.read_status === 'sent');
+        filtered = filtered.filter(c => c.read_status === 'sent');
+        break;
       case 'Activos':
-        return conversations.filter(c => {
+        filtered = filtered.filter(c => {
           if (!c.last_client_message_at) return false;
           const messageDate = new Date(c.last_client_message_at).getTime();
           return messageDate > twentyFourHoursAgo;
         });
+        break;
       case 'Todos':
       default:
-        return conversations;
+        // No se aplica ningún filtro de estado
+        break;
     }
-  }, [conversations, activeFilter]);
+
+    // Luego, aplicar el filtro de búsqueda si hay un término de búsqueda
+    if (searchTerm.trim() !== '') {
+      const lowercasedSearchTerm = searchTerm.toLowerCase();
+      filtered = filtered.filter(c => {
+        const phoneNumber = c.customer_phone_number || '';
+        const cedula = c.client_cedula || '';
+        return (
+          phoneNumber.toLowerCase().includes(lowercasedSearchTerm) ||
+          cedula.toLowerCase().includes(lowercasedSearchTerm)
+        );
+      });
+    }
+
+    return filtered;
+  }, [conversations, activeFilter, searchTerm]);
 
   const getButtonClass = (filterName) => {
     if (activeFilter === filterName) {
@@ -55,8 +76,10 @@ const WppConversationSidebar = ({ conversations, selectedConversation, onSelectC
       <div className="p-3 bg-gray-50 border-b border-gray-200 sticky top-[64px] z-10">
         <input
           type="text"
-          placeholder="Buscar cliente..."
+          placeholder="Buscar por teléfono o cédula..."
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
       <div className="flex justify-around p-3 bg-gray-100 border-b border-gray-200 sticky top-[64px] z-10">
