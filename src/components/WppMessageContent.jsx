@@ -96,7 +96,7 @@ const WppMessageContent = ({
   conversationId,
   onDocumentClick
 }) => {
-  const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaUrl, setMediaUrl] = useState(msg.localMediaUrl || '');
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [loadAttempted, setLoadAttempted] = useState(false);
@@ -133,7 +133,7 @@ const WppMessageContent = ({
       const isMedia = ['image', 'video', 'audio', 'document', 'sticker'].includes(messageType);
       const shouldLoad = (isIntersecting || hasBeenVisible || isNearViewport) && isMedia && mediaId;
 
-      if (!shouldLoad || mediaUrl || hasError || loadAttempted) {
+      if (mediaUrl || !shouldLoad || hasError || loadAttempted) {
         return;
       }
 
@@ -157,7 +157,7 @@ const WppMessageContent = ({
         setLoadAttempted(true);
       }
     }, delay);
-  }, [isIntersecting, hasBeenVisible, isNearViewport, messageType, mediaId, conversationId, mediaUrl, hasError, loadAttempted, loadPriority]);
+  }, [isIntersecting, hasBeenVisible, isNearViewport, messageType, mediaId, conversationId, mediaUrl, hasError, loadAttempted, loadPriority, mediaUrl]);
 
   useEffect(() => {
     debouncedLoadMedia();

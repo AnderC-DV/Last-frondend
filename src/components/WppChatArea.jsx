@@ -21,6 +21,7 @@ const WppChatArea = ({
   isLoadingMessages,
   isLoadingOlderMessages,
   hasMoreMessages,
+  onLoadOlderMessages, // <-- Añadir nueva prop
   isSessionExpired,
   onOpenExpiredSessionModal,
   selectedTemplate,
@@ -48,6 +49,7 @@ const WppChatArea = ({
           isLoadingMessages={isLoadingMessages}
           isLoadingOlderMessages={isLoadingOlderMessages}
           hasMoreMessages={hasMoreMessages}
+          onLoadOlderMessages={onLoadOlderMessages} // <-- Pasar prop
         />
       </div>
 

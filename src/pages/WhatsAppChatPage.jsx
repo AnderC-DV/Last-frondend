@@ -1,5 +1,17 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { getConversations, sendMessage, getConversation, BASE_URL } from '../services/api';
+import {
+  getConversations,
+  sendMessage,
+  getConversation,
+  BASE_URL,
+  getSignedUploadForMedia,
+  sendImageFromGCS,
+  sendVideoFromGCS,
+  sendAudioFromGCS,
+  sendDocumentFromGCS,
+  sendStickerFromGCS,
+  sendTemplatedMessage
+} from '../services/api';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import ExpiredSessionModal from '../components/ExpiredSessionModal';
 import WppConversationSidebar from '../components/WppConversationSidebar';
@@ -116,13 +128,9 @@ const WhatsAppChatPage = () => {
     // Mostrar/ocultar botón de scroll
     const shouldShowButton = scrollTop + clientHeight < scrollHeight - 200;
     setShowScrollButton(shouldShowButton);
-
-    // Detectar si está cerca del inicio (primeros 100px) para cargar más mensajes antiguos
-    const isNearTop = scrollTop <= 100;
-    if (isNearTop && hasMoreMessages && !isLoadingOlderMessages && messages.length > 0) {
-      loadOlderMessages();
-    }
-  }, [hasMoreMessages, isLoadingOlderMessages, messages.length]);
+    
+    // La detección de scroll hacia arriba ahora es manejada por WppMessageList
+  }, []);
 
   // Función para cargar mensajes más antiguos usando paginación del backend
   const loadOlderMessages = useCallback(async () => {
@@ -214,8 +222,8 @@ const WhatsAppChatPage = () => {
       );
 
       const sortedData = enrichedConversations.sort((a, b) => {
-        const timeA = a.last_client_message_at ? new Date(a.last_client_message_at) : new Date(0);
-        const timeB = b.last_client_message_at ? new Date(b.last_client_message_at) : new Date(0);
+        const timeA = a.updated_at ? new Date(a.updated_at) : new Date(0);
+        const timeB = b.updated_at ? new Date(b.updated_at) : new Date(0);
         return timeB - timeA;
       });
 
@@ -339,7 +347,9 @@ const WhatsAppChatPage = () => {
         const updatedConvo = {
           ...prev[convoIndex],
           last_message_preview: newMessage.body || `[${newMessage.type}]`,
-          last_client_message_at: newMessage.timestamp,
+          updated_at: newMessage.timestamp,
+          // Solo actualizamos last_client_message_at si el mensaje es del cliente
+          last_client_message_at: newMessage.direction === 'inbound' ? newMessage.timestamp : prev[convoIndex].last_client_message_at,
           read_status: isConversationSelected ? 'read' : 'sent',
         };
 
@@ -407,7 +417,7 @@ const WhatsAppChatPage = () => {
     };
   }, [subscribe, scrollToBottom]);
 
-  // Efecto para manejar el scroll del contenedor de mensajes
+  // Efecto para manejar el scroll del contenedor de mensajes (solo para el botón de scroll to bottom)
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (container) {
@@ -451,6 +461,22 @@ const WhatsAppChatPage = () => {
       const messageToSend = newMessage;
       setNewMessage('');
       setTimeout(scrollToBottom, 100);
+
+      // Optimistic update for conversation list
+      setConversations(prev => {
+        const convoIndex = prev.findIndex(c => c.id === selectedConversation.id);
+        if (convoIndex === -1) return prev;
+
+        const updatedConvo = {
+          ...prev[convoIndex],
+          last_message_preview: messageToSend,
+          updated_at: optimisticMessage.timestamp,
+        };
+
+        const newConversations = [...prev];
+        newConversations.splice(convoIndex, 1);
+        return [updatedConvo, ...newConversations];
+      });
 
       try {
         const messageData = {
@@ -514,7 +540,27 @@ const WhatsAppChatPage = () => {
   const handleSendMedia = async () => {
     if (!selectedMediaFile || !selectedConversation || !mediaType) return;
 
+    const temporaryId = -Date.now();
+    const localMediaUrl = URL.createObjectURL(selectedMediaFile);
+
+    const optimisticMessage = {
+      id: temporaryId,
+      message_id: `temp_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      from_phone_number: 'me',
+      status: 'pending',
+      message_type: mediaType,
+      localMediaUrl: localMediaUrl, // <-- LA PROPIEDAD CLAVE
+      body: selectedMediaFile.name,
+    };
+
+    setMessages(prevMessages => [...prevMessages, optimisticMessage]);
+    setSelectedMediaFile(null);
+    setMediaType('');
+    setTimeout(scrollToBottom, 100);
+
     setIsUploadingMedia(true);
+
     try {
       // Determinar el tipo MIME correcto
       let mimeType = selectedMediaFile.type;
@@ -570,21 +616,28 @@ const WhatsAppChatPage = () => {
       }
 
       if (response) {
-        setMessages(prevMessages => [...prevMessages, response]);
-        setTimeout(scrollToBottom, 100);
+        // Al recibir la respuesta, reemplazamos el mensaje.
+        // El nuevo objeto 'response' NO tendrá 'localMediaUrl',
+        // por lo que WppMessageContent usará la carga diferida normal.
+        setMessages(prevMessages =>
+          prevMessages.map(msg =>
+            msg.id === temporaryId ? response : msg
+          )
+        );
       }
-      setSelectedMediaFile(null);
-      setMediaType('');
-      setIsUploadingMedia(false);
     } catch (error) {
-      setIsUploadingMedia(false);
+      setMessages(prevMessages =>
+        prevMessages.map(msg =>
+          msg.id === temporaryId ? { ...msg, status: 'failed' } : msg
+        )
+      );
       console.error('Error sending media:', error);
-
-      // Silenciar errores comunes para no molestar al usuario
-      // Solo mostrar alert para errores críticos
       if (error.message && !error.message.includes('CORS') && !error.message.includes('Failed to fetch')) {
         alert('Error al enviar el medio: ' + error.message);
       }
+    } finally {
+      setIsUploadingMedia(false);
+      URL.revokeObjectURL(localMediaUrl);
     }
   };
   return (
@@ -618,6 +671,7 @@ const WhatsAppChatPage = () => {
         isLoadingMessages={isLoadingMessages}
         isLoadingOlderMessages={isLoadingOlderMessages}
         hasMoreMessages={hasMoreMessages}
+        onLoadOlderMessages={loadOlderMessages}
         isSessionExpired={isSessionExpired}
         onOpenExpiredSessionModal={() => setIsExpiredSessionModalOpen(true)}
         selectedTemplate={selectedTemplate}

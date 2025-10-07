@@ -106,6 +106,22 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
     onSelectConversation(convo);
   };
 
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const today = new Date();
+    
+    const isToday = date.getDate() === today.getDate() &&
+                  date.getMonth() === today.getMonth() &&
+                  date.getFullYear() === today.getFullYear();
+
+    if (isToday) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else {
+      return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    }
+  };
+
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50 rounded-xl p-2">
       <ul className="space-y-3">
@@ -130,7 +146,7 @@ const WppConversationList = ({ conversations, selectedConversation, onSelectConv
                 </div>
                 <div className="flex flex-col items-end ml-2 flex-shrink-0">
                   <span className="text-xs text-gray-400">
-                    {convo.last_client_message_at ? new Date(convo.last_client_message_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
+                    {formatTimestamp(convo.updated_at)}
                   </span>
                   <WppWindowCounter lastClientMessageAt={convo.last_client_message_at} />
                 </div>

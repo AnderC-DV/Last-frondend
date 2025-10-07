@@ -37,9 +37,11 @@ const WppConversationSidebar = ({ conversations, selectedConversation, onSelectC
       filtered = filtered.filter(c => {
         const phoneNumber = c.customer_phone_number || '';
         const cedula = c.client_cedula || '';
+        const chatTitle = c.chat_title || '';
         return (
           phoneNumber.toLowerCase().includes(lowercasedSearchTerm) ||
-          cedula.toLowerCase().includes(lowercasedSearchTerm)
+          cedula.toLowerCase().includes(lowercasedSearchTerm) ||
+          chatTitle.toLowerCase().includes(lowercasedSearchTerm)
         );
       });
     }
@@ -76,7 +78,7 @@ const WppConversationSidebar = ({ conversations, selectedConversation, onSelectC
       <div className="p-3 bg-gray-50 border-b border-gray-200 sticky top-[64px] z-10">
         <input
           type="text"
-          placeholder="Buscar por teléfono o cédula..."
+          placeholder="Buscar por nombre, teléfono o cédula..."
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}

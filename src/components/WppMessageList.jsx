@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useLayoutEffect } from 'react';
 import WppMessageContent from './WppMessageContent';
 import WppMessageStatus from './WppMessageStatus';
 import WppScrollToBottomButton from './WppScrollToBottomButton';
@@ -12,15 +12,63 @@ const WppMessageList = ({
   scrollToBottom,
   isLoadingMessages,
   isLoadingOlderMessages,
-  hasMoreMessages
+  hasMoreMessages,
+  onLoadOlderMessages, // <-- Nueva prop para cargar mensajes
 }) => {
   const messagesContainerRef = useRef(null);
+  const loaderRef = useRef(null); // Ref para el elemento "centinela"
+  const prevScrollHeightRef = useRef(null); // Ref para guardar el scrollHeight anterior
 
+  // Hook para hacer scroll al final cuando se selecciona una nueva conversación
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
-  }, [messages, selectedConversation]);
+  }, [selectedConversation]); // Se ejecuta solo al cambiar de conversación
+
+  // Hook para preservar la posición del scroll al cargar mensajes antiguos
+  useLayoutEffect(() => {
+    if (prevScrollHeightRef.current !== null && messagesContainerRef.current) {
+      const scrollHeight = messagesContainerRef.current.scrollHeight;
+      // La nueva posición de scroll es la diferencia de altura, manteniendo la vista actual
+      const newScrollTop = scrollHeight - prevScrollHeightRef.current;
+      messagesContainerRef.current.scrollTop = newScrollTop;
+    }
+    // Actualizamos la referencia para el próximo renderizado
+    if (messagesContainerRef.current) {
+      prevScrollHeightRef.current = messagesContainerRef.current.scrollHeight;
+    }
+  }, [messages]); // Se ejecuta cada vez que los mensajes cambian
+
+  // Hook para el Intersection Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+        // Si el centinela es visible, hay más mensajes y no estamos cargando, entonces cargamos más.
+        if (firstEntry.isIntersecting && hasMoreMessages && !isLoadingOlderMessages) {
+          // Guardamos el scrollHeight actual ANTES de que se carguen los nuevos mensajes
+          if (messagesContainerRef.current) {
+            prevScrollHeightRef.current = messagesContainerRef.current.scrollHeight;
+          }
+          onLoadOlderMessages();
+        }
+      },
+      { root: messagesContainerRef.current, threshold: 1.0 }
+    );
+
+    const currentLoader = loaderRef.current;
+    if (currentLoader) {
+      observer.observe(currentLoader);
+    }
+
+    // Limpieza: desconectar el observador cuando el componente se desmonte
+    return () => {
+      if (currentLoader) {
+        observer.unobserve(currentLoader);
+      }
+    };
+  }, [hasMoreMessages, isLoadingOlderMessages, onLoadOlderMessages]);
 
   return (
     <div
@@ -32,22 +80,23 @@ const WppMessageList = ({
         height: '100%'
       }}
     >
-      {/* Si no hay conversación seleccionada, mostrar mensaje amigable */}
-      {!selectedConversation && (
-        <div className="flex flex-col items-center justify-center h-full w-full select-none">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-green-400 mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 20.5c4.142 0 7.5-3.358 7.5-7.5s-3.358-7.5-7.5-7.5-7.5 3.358-7.5 7.5c0 1.61.507 3.104 1.38 4.34L4 20l3.16-.88A7.47 7.47 0 0012 20.5z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.5 11.5h.01M15.5 11.5h.01" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15c1.5 1 4.5 1 6 0" /></svg>
-          <h2 className="text-2xl font-semibold text-gray-700 mb-2">Selecciona una conversación</h2>
-          <p className="text-gray-500 text-base text-center max-w-md">Aquí aparecerán los mensajes de la conversación seleccionada.</p>
-        </div>
-      )}
-
-      {/* Indicador de carga de mensajes antiguos */}
+      {/* Elemento Centinela y Loader */}
+      <div ref={loaderRef} className="h-1" />
       {selectedConversation && isLoadingOlderMessages && hasMoreMessages && (
         <div className="flex justify-center py-4">
           <div className="flex items-center space-x-2 text-gray-500">
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-500"></div>
             <span className="text-sm">Cargando mensajes antiguos...</span>
           </div>
+        </div>
+      )}
+
+      {/* Si no hay conversación seleccionada, mostrar mensaje amigable */}
+      {!selectedConversation && (
+        <div className="flex flex-col items-center justify-center h-full w-full select-none">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-green-400 mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 20.5c4.142 0 7.5-3.358 7.5-7.5s-3.358-7.5-7.5-7.5-7.5 3.358-7.5 7.5c0 1.61.507 3.104 1.38 4.34L4 20l3.16-.88A7.47 7.47 0 0012 20.5z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.5 11.5h.01M15.5 11.5h.01" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15c1.5 1 4.5 1 6 0" /></svg>
+          <h2 className="text-2xl font-semibold text-gray-700 mb-2">Selecciona una conversación</h2>
+          <p className="text-gray-500 text-base text-center max-w-md">Aquí aparecerán los mensajes de la conversación seleccionada.</p>
         </div>
       )}
 
