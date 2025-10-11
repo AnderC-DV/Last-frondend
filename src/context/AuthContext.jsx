@@ -52,7 +52,7 @@ export const AuthProvider = ({ children }) => {
     // Solo activar el control de inactividad si el usuario está autenticado
     if (!user) return;
 
-    const INACTIVITY_TIMEOUT_MS = Number(import.meta.env?.VITE_INACTIVITY_TIMEOUT_MS) || 15 * 60 * 1000; // default 15 min
+    const INACTIVITY_TIMEOUT_MS = Number(import.meta.env?.VITE_INACTIVITY_TIMEOUT_MS) || 60 * 60 * 1000; // default 60 min
     let activityTimer;
 
     const handleExpire = () => {

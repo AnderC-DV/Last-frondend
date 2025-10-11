@@ -71,40 +71,21 @@ const CampaignReportDrawer = ({ open, onClose, campaign }) => {
       setError(null);
       setTemplate(null);
       setFullCampaign(null);
-      try {
-        // 1) Usar el message_template_id que venga en la fila si está presente
-        const directTemplateId = campaign?.message_template_id || campaign?.template_id || campaign?.messageTemplateId;
-        if (directTemplateId) {
-          const tpl = await getTemplateById(directTemplateId);
-          if (!ignore) setTemplate(tpl);
-          // Aún así intentamos traer la campaña completa para metadata opcional
-          try {
-            const list = await getAllCampaigns();
-            const found = Array.isArray(list)
-              ? list.find(c => String(c?.id) === String(campaign.id) || String(c?.external_id || '') === String(campaign.id))
-              : null;
-            if (!ignore) setFullCampaign(found || null);
-          } catch {}
-          return;
-        }
+      setAudienceName('Cargando...');
+      setAudienceDefinition(null);
 
-        // 2) Si no viene en la fila, buscar en todas las campañas y matchear por id como string
+      try {
+        // Siempre buscar la campaña completa primero
         const list = await getAllCampaigns();
         const found = Array.isArray(list)
           ? list.find(c => String(c?.id) === String(campaign.id) || String(c?.external_id || '') === String(campaign.id))
           : null;
-        if (!ignore) setFullCampaign(found || null);
-        const templateId = found?.message_template_id || found?.template_id || found?.messageTemplateId;
-        if (templateId) {
-          const tpl = await getTemplateById(templateId);
-          if (!ignore) setTemplate(tpl);
-        } else if (!ignore) {
-          setError('No se encontró el template asociado a la campaña.');
-        }
-      } catch (e) {
-        if (!ignore) setError(e?.message || 'No se pudo cargar el detalle de la campaña.');
 
-        // Cargar detalles de la audiencia
+        if (!ignore) {
+          setFullCampaign(found || null);
+        }
+
+        // Cargar detalles de la audiencia si se encontró la campaña
         if (!ignore && found) {
           if (found.audience_filter_id) {
             try {
@@ -131,8 +112,22 @@ const CampaignReportDrawer = ({ open, onClose, campaign }) => {
             setAudienceName('No definido');
             setAudienceDefinition(null);
           }
+        } else if (!ignore) {
+          // Si no se encontró la campaña completa
+          setAudienceName('Información de audiencia no disponible');
         }
 
+        // Cargar plantilla
+        const templateId = found?.message_template_id || found?.template_id || found?.messageTemplateId || campaign?.message_template_id || campaign?.template_id;
+        if (templateId) {
+          const tpl = await getTemplateById(templateId);
+          if (!ignore) setTemplate(tpl);
+        } else if (!ignore) {
+          setError('No se encontró el template asociado a la campaña.');
+        }
+
+      } catch (e) {
+        if (!ignore) setError(e?.message || 'No se pudo cargar el detalle de la campaña.');
       } finally {
         if (!ignore) setLoading(false);
       }

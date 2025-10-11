@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Select from 'react-select';
 import { getAvailableFilterFields, getSimpleClientCount, createSimpleFilter, getDistinctValues } from '../../services/api';
 import AudienceFilterSimpleCreate from '../../schemas/AudienceFilterSimpleCreate';
 import { segmentationOperators } from './segmentationUtils';
@@ -6,19 +7,16 @@ import { toast } from 'sonner';
 
 // --- Sub-componentes ---
 const ConditionRow = ({ condition, onConditionChange, onRemove, fields, operators, path }) => {
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const isMultiValueOperator = ['in', 'not_in'].includes(condition.operator);
   const isNoValueOperator = ['is_null', 'is_not_null'].includes(condition.operator);
   const isBetweenOperator = condition.operator === 'between';
 
-  // Detectar si el campo seleccionado es de tipo fecha según metadata del backend o por heurística del nombre
   const fieldMeta = fields.find(f => f.variable_name === condition.field);
   const isDateField = !!fieldMeta && (
     fieldMeta.data_type === 'date' || /fecha|date/i.test(fieldMeta.variable_name) || /fecha|date/i.test(fieldMeta.description || '')
   );
 
   useEffect(() => {
-    // This effect runs on mount and fetches distinct values if a field is pre-selected (edit mode).
     const fetchInitialDistinctValues = async () => {
       if (condition.field && !isNoValueOperator && (!condition.distinctValues || condition.distinctValues.length === 0)) {
         try {
@@ -30,11 +28,9 @@ const ConditionRow = ({ condition, onConditionChange, onRemove, fields, operator
       }
     };
     fetchInitialDistinctValues();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only on mount
+  }, []);
 
   useEffect(() => {
-    // Reset value based on operator type when operator changes
     if (isMultiValueOperator && !Array.isArray(condition.value)) {
       onConditionChange(path, 'value', []);
     } else if (isNoValueOperator && condition.value !== null) {
@@ -46,17 +42,20 @@ const ConditionRow = ({ condition, onConditionChange, onRemove, fields, operator
     } else if (!isMultiValueOperator && !isNoValueOperator && !isBetweenOperator && (condition.value === null || Array.isArray(condition.value))) {
       onConditionChange(path, 'value', '');
     }
-    // No need to re-fetch distinct values here, it's handled by handleFieldChange
-  }, [condition.operator, path, isMultiValueOperator, isNoValueOperator, isBetweenOperator, isDateField, condition.value]); // Depend on operator and path
+  }, [condition.operator, path, isMultiValueOperator, isNoValueOperator, isBetweenOperator, isDateField, condition.value]);
 
-  const handleFieldChange = async (e) => {
-    const newField = e.target.value;
+  const handleFieldChange = async (selectedOption) => {
+    const newField = selectedOption ? selectedOption.value : '';
     onConditionChange(path, 'field', newField);
-    // Reset value to a generic empty state, useEffect will refine based on operator
-    onConditionChange(path, 'value', ''); 
-    onConditionChange(path, 'distinctValues', []); // Clear distinct values for new field
+    onConditionChange(path, 'value', '');
+    onConditionChange(path, 'distinctValues', []);
 
-    if (newField && !isNoValueOperator) { // Fetch distinct values if field is selected and operator requires a value
+    // Auto-select operator for special fields
+    if (['cedula', 'codigo_de_obligacion'].includes(newField)) {
+      onConditionChange(path, 'operator', 'contains');
+    }
+
+    if (newField && !isNoValueOperator) {
       try {
         const distinctValues = await getDistinctValues(newField);
         onConditionChange(path, 'distinctValues', distinctValues);
@@ -66,24 +65,20 @@ const ConditionRow = ({ condition, onConditionChange, onRemove, fields, operator
       }
     }
   };
-
-  const handleMultiSelectChange = (valueToToggle) => {
-    const currentValues = Array.isArray(condition.value) ? condition.value : [];
-    const newValue = currentValues.includes(valueToToggle)
-      ? currentValues.filter(v => v !== valueToToggle)
-      : [...currentValues, valueToToggle];
-    onConditionChange(path, 'value', newValue);
+  
+  const handleOperatorChange = (selectedOption) => {
+    const newOperator = selectedOption ? selectedOption.value : '';
+    onConditionChange(path, 'operator', newOperator);
   };
 
-  const handleSingleValueChange = (e) => {
-    let val = e.target.value;
-    // Normalizar formato de fecha AAAA-MM-DD si es campo fecha
-    if (isDateField && val) {
-      // El input type="date" ya entrega AAAA-MM-DD, pero normalizamos por seguridad
-      const m = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (m) val = `${m[1]}-${m[2]}-${m[3]}`;
+  const handleValueChange = (selectedOption) => {
+    if (isMultiValueOperator) {
+      const newValue = selectedOption ? selectedOption.map(option => option.value) : [];
+      onConditionChange(path, 'value', newValue);
+    } else {
+      const newValue = selectedOption ? selectedOption.value : '';
+      onConditionChange(path, 'value', newValue);
     }
-    onConditionChange(path, 'value', val);
   };
 
   const handleDateRangeChange = (e, index) => {
@@ -92,107 +87,149 @@ const ConditionRow = ({ condition, onConditionChange, onRemove, fields, operator
     onConditionChange(path, 'value', newDates);
   };
 
+  const handleCommaSeparatedChange = (e) => {
+    // Permite números y comas, eliminando otros caracteres.
+    const sanitizedValue = e.target.value.replace(/[^\d,]/g, '');
+    onConditionChange(path, 'value', sanitizedValue);
+  };
+
+  const selectStyles = {
+    control: (base) => ({ ...base, minHeight: '42px', borderColor: '#D1D5DB' }),
+    menu: (base) => ({ ...base, zIndex: 10 }),
+  };
+
   const renderValueInput = () => {
+    // Prioridad 1: Operadores sin valor
     if (isNoValueOperator) {
       return <span className="text-sm text-gray-500 italic">No requiere valor</span>;
     }
+
+    // Prioridad 2: Operadores de lista ('in', 'not_in')
+    if (isMultiValueOperator) {
+      const isSpecialField = ['cedula', 'codigo_de_obligacion'].includes(condition.field);
+      
+      // Para campos no especiales con valores distintos, mostrar el Select múltiple
+      if (!isSpecialField && condition.distinctValues && condition.distinctValues.length > 0) {
+        const options = condition.distinctValues.map(v => ({ value: v, label: v }));
+        const selectedValue = options.filter(option => Array.isArray(condition.value) && condition.value.includes(option.value));
+        return (
+          <Select
+            isMulti
+            isSearchable
+            isClearable
+            options={options}
+            value={selectedValue}
+            onChange={handleValueChange}
+            placeholder="Seleccionar o buscar..."
+            noOptionsMessage={() => 'No hay opciones'}
+            styles={selectStyles}
+          />
+        );
+      }
+      
+      // Para campos especiales o campos sin valores distintos, mostrar el textarea
+      return (
+        <textarea
+          value={condition.value || ''}
+          onChange={isSpecialField ? handleCommaSeparatedChange : (e) => onConditionChange(path, 'value', e.target.value)}
+          placeholder="Pegue valores separados por comas."
+          className="w-full p-2 border rounded-md text-sm font-mono h-24"
+          rows="3"
+        />
+      );
+    }
+
+    // Prioridad 3: Campos especiales con operadores de valor único
+    if (['cedula', 'codigo_de_obligacion'].includes(condition.field)) {
+      return (
+        <input
+          type="text"
+          value={condition.value || ''}
+          onChange={handleCommaSeparatedChange} // Saneamiento de números y comas
+          placeholder="Valor (solo números y comas)"
+          className="w-full p-2 border rounded-md text-sm"
+        />
+      );
+    }
+
+    // Prioridad 4: Fallback para otros tipos de campos (operadores de valor único)
     if (isDateField && isBetweenOperator) {
       const [startDate, endDate] = Array.isArray(condition.value) ? condition.value : ['', ''];
       return (
         <div className="flex items-center gap-2">
-          <input
-            type="date"
-            value={startDate || ''}
-            onChange={(e) => handleDateRangeChange(e, 0)}
-            className="w-full p-2 border rounded-md text-sm"
-          />
+          <input type="date" value={startDate || ''} onChange={(e) => handleDateRangeChange(e, 0)} className="w-full p-2 border rounded-md text-sm" />
           <span className="text-sm text-gray-600">a</span>
-          <input
-            type="date"
-            value={endDate || ''}
-            onChange={(e) => handleDateRangeChange(e, 1)}
-            className="w-full p-2 border rounded-md text-sm"
-          />
+          <input type="date" value={endDate || ''} onChange={(e) => handleDateRangeChange(e, 1)} className="w-full p-2 border rounded-md text-sm" />
         </div>
       );
     }
-    if (isMultiValueOperator && condition.distinctValues && condition.distinctValues.length > 0) {
-      const selectedValues = Array.isArray(condition.value) ? condition.value : [];
-      const displayValue = selectedValues.length > 0
-        ? selectedValues.join(', ')
-        : 'Seleccionar Valores';
+    if (isDateField) {
+        return <input type="date" value={condition.value || ''} onChange={(e) => onConditionChange(path, 'value', e.target.value)} className="w-full p-2 border rounded-md text-sm" />;
+    }
 
+    if (condition.distinctValues && condition.distinctValues.length > 0) {
+      const options = condition.distinctValues.map(v => ({ value: v, label: v }));
+      const selectedValue = options.find(option => option.value === condition.value) || null;
       return (
-        <div className="relative">
-          <button
-            type="button"
-            className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-left flex justify-between items-center focus:ring focus:ring-blue-200 focus:border-blue-400"
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-          >
-            <span className={selectedValues.length === 0 ? 'text-gray-500' : ''}>
-              {displayValue}
-            </span>
-            <svg className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-          </button>
-          {isDropdownOpen && (
-            <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
-              {condition.distinctValues.map(v => (
-                <label key={v} className="flex items-center p-2 hover:bg-gray-100 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedValues.includes(v)}
-                    onChange={() => handleMultiSelectChange(v)}
-                    className="form-checkbox h-4 w-4 text-blue-600 rounded"
-                  />
-                  <span className="ml-2 text-sm">{v}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    } else if (!isMultiValueOperator && !isNoValueOperator && isDateField) {
-      return (
-        <input
-          type="date"
-          value={condition.value || ''}
-          onChange={handleSingleValueChange}
-          className="w-full p-2 border rounded-md text-sm"
-        />
-      );
-    } else if (condition.distinctValues && condition.distinctValues.length > 0) {
-      return (
-        <select value={condition.value} onChange={handleSingleValueChange} className="w-full p-2 border rounded-md bg-white text-sm">
-          <option value="">Seleccionar Valor</option>
-          {condition.distinctValues.map(v => <option key={v} value={v}>{v}</option>)}
-        </select>
-      );
-    } else {
-      return (
-        <input
-          type="text"
-          value={condition.value}
-          onChange={handleSingleValueChange}
-          placeholder="Valor"
-          className="w-full p-2 border rounded-md text-sm"
+        <Select
+          isSearchable
+          isClearable
+          options={options}
+          value={selectedValue}
+          onChange={handleValueChange}
+          placeholder="Seleccionar o buscar..."
+          noOptionsMessage={() => 'No hay opciones'}
+          styles={selectStyles}
         />
       );
     }
+
+    return (
+      <input
+        type="text"
+        value={condition.value || ''}
+        onChange={(e) => onConditionChange(path, 'value', e.target.value)}
+        placeholder="Valor"
+        className="w-full p-2 border rounded-md text-sm"
+      />
+    );
   };
+
+  const fieldOptions = fields.map(f => ({ value: f.variable_name, label: f.description }));
+  
+  // Dynamically filter operators based on the selected field
+  let availableOperators = operators;
+  if (['cedula', 'codigo_de_obligacion'].includes(condition.field)) {
+    // Assuming 'contains' is the user-facing operator for this special logic.
+    // You might need to adjust the id ('contains') if it's different in segmentationUtils.js
+    availableOperators = operators.filter(op => op.id === 'contains');
+  }
+  const operatorOptions = availableOperators.map(o => ({ value: o.id, label: o.name }));
 
   return (
     <div className="grid grid-cols-12 items-center gap-4 mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
       <div className="col-span-5">
-        <select value={condition.field} onChange={handleFieldChange} className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm focus:ring focus:ring-blue-200 focus:border-blue-400">
-          <option value="">Seleccionar Campo</option>
-          {fields.map(f => <option key={f.variable_name} value={f.variable_name}>{f.description}</option>)}
-        </select>
+        <Select
+          options={fieldOptions}
+          value={fieldOptions.find(f => f.value === condition.field) || null}
+          onChange={handleFieldChange}
+          placeholder="Seleccionar Campo..."
+          isSearchable
+          isClearable
+          styles={selectStyles}
+        />
       </div>
       <div className="col-span-3">
-        <select value={condition.operator} onChange={(e) => onConditionChange(path, 'operator', e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm focus:ring focus:ring-blue-200 focus:border-blue-400">
-          <option value="">Operador</option>
-          {operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-        </select>
+        <Select
+          options={operatorOptions}
+          value={operatorOptions.find(o => o.value === condition.operator) || null}
+          onChange={handleOperatorChange}
+          placeholder="Operador..."
+          isSearchable
+          isClearable
+          styles={selectStyles}
+          isDisabled={operatorOptions.length === 1} // Disable if only one option is available
+        />
       </div>
       <div className="col-span-3">
         {renderValueInput()}
@@ -309,10 +346,18 @@ const SimpleFilterBuilder = ({ setClientCount, setCampaignData, initialDefinitio
           return c.value !== '' && c.value !== null;
         })
         .map(({ id: _id, distinctValues: _distinctValues, ...rest }) => {
-          // Ensure 'in' and 'not_in' values are arrays, others are not
-          // The handleValueChange function now ensures the value is already an array for multi-value operators.
-          // For other operators, it should be a string.
-          return rest;
+          const finalRest = { ...rest };
+          // Map 'contains' to 'in' for special fields before sending to backend
+          if (['cedula', 'codigo_de_obligacion'].includes(finalRest.field) && finalRest.operator === 'contains') {
+            finalRest.operator = 'in';
+          }
+
+          // If operator is 'in'/'not_in' and value is a string, split it into an array
+          if (['in', 'not_in'].includes(finalRest.operator) && typeof finalRest.value === 'string') {
+            finalRest.value = finalRest.value.split(',').filter(val => val !== '');
+          }
+          
+          return finalRest;
         });
 
     return {
