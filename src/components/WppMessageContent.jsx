@@ -104,6 +104,11 @@ const WppMessageContent = ({
   const messageRef = useRef(null);
   const loadTimeoutRef = useRef(null);
 
+  const handleRetry = () => {
+    setHasError(false);
+    setLoadAttempted(false);
+  };
+
   // Normalizar propiedades del mensaje para manejar datos de API y WebSocket
   const messageType = msg.type || msg.message_type;
   const mediaId = msg.message_id || (msg.media ? msg.media.id : null);
@@ -170,35 +175,58 @@ const WppMessageContent = ({
     };
   }, [debouncedLoadMedia]);
 
-  // Mostrar indicador de carga optimizado
-  if (isLoading && ['image', 'video', 'audio', 'document', 'sticker'].includes(messageType)) {
-    return (
-      <div ref={messageRef} className="flex items-center space-x-2 p-2">
-        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
-        <p className="text-gray-500 italic text-sm">Cargando...</p>
-      </div>
-    );
-  }
-
   // Contenedor con referencia para intersection observer
   const renderMediaContent = () => {
+    const isPending = msg.status === 'pending';
+
+    const MediaWrapper = ({ children, className = '' }) => (
+      <div className={`relative ${className}`}>
+        <div className={isPending ? 'opacity-60' : ''}>
+          {children}
+        </div>
+        {isPending && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-10 rounded-lg">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+          </div>
+        )}
+      </div>
+    );
+
+    if (hasError && !isPending) {
+      return (
+        <div className="flex items-center space-x-2 text-sm">
+          <p className="text-red-500 italic">Error al cargar.</p>
+          <button onClick={handleRetry} className="text-blue-500 underline">Reintentar</button>
+        </div>
+      );
+    }
+
+    if (isLoading && !mediaUrl) {
+      return (
+        <div className="flex items-center space-x-2 p-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
+          <p className="text-gray-500 italic text-sm">Cargando...</p>
+        </div>
+      );
+    }
+
     switch (messageType) {
       case 'image':
         return mediaUrl ? (
-          <div>
-            <img src={mediaUrl} alt="Imagen" className="max-w-xs rounded-lg" onError={() => setHasError(true)} />
+          <MediaWrapper>
+            <img src={mediaUrl} alt="Imagen" className="max-w-xs rounded-lg" onError={() => !isPending && setHasError(true)} />
             {messageBody && <p className="text-sm leading-relaxed mt-1 whitespace-pre-wrap">{messageBody}</p>}
-          </div>
+          </MediaWrapper>
         ) : <p className="text-gray-500 italic">Imagen no disponible</p>;
       case 'video':
         return mediaUrl ? (
-          <div>
-            <video src={mediaUrl} controls className="max-w-xs rounded-lg" onError={() => setHasError(true)} />
+          <MediaWrapper>
+            <video src={mediaUrl} controls className="max-w-xs rounded-lg" onError={() => !isPending && setHasError(true)} />
             {messageBody && <p className="text-sm leading-relaxed mt-1 whitespace-pre-wrap">{messageBody}</p>}
-          </div>
+          </MediaWrapper>
         ) : <p className="text-gray-500 italic">Video no disponible</p>;
       case 'audio':
-        return mediaUrl ? <audio src={mediaUrl} controls onError={() => setHasError(true)} /> : <p className="text-gray-500 italic">Audio no disponible</p>;
+        return mediaUrl ? <audio src={mediaUrl} controls onError={() => !isPending && setHasError(true)} /> : <p className="text-gray-500 italic">Audio no disponible</p>;
       case 'document':
         return mediaUrl ? (
           <button onClick={() => onDocumentClick(mediaUrl)} className="text-blue-500 underline hover:text-blue-700">
@@ -206,7 +234,7 @@ const WppMessageContent = ({
           </button>
         ) : <p className="text-gray-500 italic">Documento no disponible</p>;
       case 'sticker':
-        return mediaUrl ? <img src={mediaUrl} alt="Sticker" className="w-24 h-24" onError={() => setHasError(true)} /> : <p className="text-gray-500 italic">Sticker no disponible</p>;
+        return mediaUrl ? <img src={mediaUrl} alt="Sticker" className="w-24 h-24" onError={() => !isPending && setHasError(true)} /> : <p className="text-gray-500 italic">Sticker no disponible</p>;
       case 'text':
         return <p className="text-sm leading-relaxed whitespace-pre-wrap">{messageBody}</p>;
       default:

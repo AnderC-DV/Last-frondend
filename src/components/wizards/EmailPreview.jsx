@@ -11,11 +11,17 @@ const EmailPreview = ({ subject, htmlContent }) => {
         iframeDoc.write(htmlContent);
         iframeDoc.close();
 
-        // Ajustar la altura del iframe al contenido
+        // Ajustar el tamaño del iframe al contenido
         const resizeIframe = () => {
           if (iframeRef.current) {
-            const contentHeight = iframeRef.current.contentWindow.document.body.scrollHeight;
+            const body = iframeRef.current.contentWindow.document.body;
+            const html = iframeRef.current.contentWindow.document.documentElement;
+            
+            const contentHeight = Math.max(body.scrollHeight, body.offsetHeight, html.clientHeight, html.scrollHeight, html.offsetHeight);
+            const contentWidth = Math.max(body.scrollWidth, body.offsetWidth, html.clientWidth, html.scrollWidth, html.offsetWidth);
+            
             iframeRef.current.style.height = `${contentHeight}px`;
+            iframeRef.current.style.width = `${contentWidth}px`;
           }
         };
 
@@ -36,7 +42,7 @@ const EmailPreview = ({ subject, htmlContent }) => {
           <span className="text-sm font-semibold text-gray-500">Asunto: </span>
           <span className="text-gray-800">{subject || '(Sin asunto)'}</span>
         </div>
-        <div className="p-6">
+        <div className="p-6 overflow-x-auto">
           <iframe
             ref={iframeRef}
             title="Vista previa de Email"
