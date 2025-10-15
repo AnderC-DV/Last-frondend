@@ -48,7 +48,7 @@ const WppClientInfo = ({ selectedConversation, userRole, setClientInfo: setParen
   const [clientInfo, setClientInfo] = useState({
     resultadoGestor: null,
     compromisos: [],
-    obligaciones: { total_obligaciones: 0, obligaciones: [] },
+    obligaciones: { total_obligaciones: 0, obligaciones: [], gestor: null },
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -67,7 +67,7 @@ const WppClientInfo = ({ selectedConversation, userRole, setClientInfo: setParen
       setClientInfo({
         resultadoGestor: null,
         compromisos: [],
-        obligaciones: { total_obligaciones: 0, obligaciones: [] },
+        obligaciones: { total_obligaciones: 0, obligaciones: [], gestor: null },
       });
       setSelectedObligations([]);
       setCondonationResult(null);
@@ -91,6 +91,20 @@ const WppClientInfo = ({ selectedConversation, userRole, setClientInfo: setParen
       } finally {
         setLoading(false);
       }
+    } else {
+      // Limpiar la información si no hay conversación seleccionada o no tiene cédula
+      const emptyInfo = {
+        resultadoGestor: null,
+        compromisos: [],
+        obligaciones: { total_obligaciones: 0, obligaciones: [], gestor: null },
+      };
+      setClientInfo(emptyInfo);
+      setParentClientInfo(emptyInfo);
+      setSelectedObligations([]);
+      setCondonationResult(null);
+      setPortfolioFilter('all');
+      setError(null);
+      setLoading(false);
     }
   }, [selectedConversation?.client_cedula, setParentClientInfo]);
 
@@ -246,6 +260,7 @@ const WppClientInfo = ({ selectedConversation, userRole, setClientInfo: setParen
           <>
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="font-semibold text-lg mb-2 text-gray-800">Resumen de Obligaciones</h3>
+              <p className="text-gray-700">Gestor: <span className="font-medium">{clientInfo.obligaciones?.gestor ?? 'No asignado'}</span></p>
               <p className="text-gray-700">Total de obligaciones: {clientInfo.obligaciones?.total_obligaciones ?? 'No disponible'}</p>
               {clientInfo.obligaciones?.obligaciones?.length > 0 && (
                 <ul className="list-disc pl-5 mt-2">

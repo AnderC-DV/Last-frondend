@@ -1,4 +1,6 @@
-export const BASE_URL = "https://backend-475190189080.us-central1.run.app/api/v1";
+// export const BASE_URL = "https://backend-475190189080.us-central1.run.app/api/v1";
+export const BASE_URL = "http://localhost:8000/api/v1";
+
 
 // Función para obtener el token de autenticación
 const getAuthToken = () => {
@@ -245,6 +247,7 @@ export const getConversations = (params = {}) => {
   const queryParams = new URLSearchParams();
   if (params.limit) queryParams.append('limit', params.limit);
   if (params.offset) queryParams.append('offset', params.offset);
+  if (params.search) queryParams.append('search', params.search); // Añadir parámetro de búsqueda
 
   const queryString = queryParams.toString();
   const endpoint = queryString
@@ -282,6 +285,43 @@ export const getConversationMessages = (conversationId, params = {}) => {
 export const sendMessage = (conversationId, messageData) => apiRequest(`/conversations/${conversationId}/reply`, 'POST', messageData);
 export const markConversationAsRead = (conversationId) => apiRequest(`/conversations/${conversationId}/read`, 'PATCH');
 export const markConversationAsUnread = (conversationId) => apiRequest(`/conversations/${conversationId}/unread`, 'PATCH');
+export const getLastMessageForConversation = async (conversationId) => {
+  const response = await getConversationMessages(conversationId, { limit: 1 });
+  return response.messages && response.messages.length > 0 ? response.messages[0] : null;
+};
+export const getLastMessagesForConversations = async (conversationIds) => {
+  try {
+    const messagePromises = conversationIds.map(id =>
+      getConversation(id, { limit: 1 })
+        .then(response => ({
+          conversationId: id,
+          message: response.messages && response.messages.length > 0 ? response.messages[0] : null
+        }))
+        .catch(error => ({
+          conversationId: id,
+          message: null,
+          error: error
+        }))
+    );
+
+    const results = await Promise.all(messagePromises);
+    
+    const messagesByConversation = results.reduce((acc, result) => {
+      if (result.message) {
+        acc[result.conversationId] = result.message;
+      }
+      if (result.error) {
+        console.error(`Failed to fetch message for conversation ${result.conversationId}:`, result.error);
+      }
+      return acc;
+    }, {});
+
+    return messagesByConversation;
+  } catch (error) {
+    console.error("Error fetching messages in batch:", error);
+    return {};
+  }
+};
 // --- Endpoints de Respuesta Multimedia desde GCS ---
 export const sendAudioFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/audio-from-gcs`, 'POST', { storage_object: gcsUrl });
 export const sendDocumentFromGCS = (conversationId, gcsUrl, filename) => apiRequest(`/conversations/${conversationId}/reply/document-from-gcs`, 'POST', { storage_object: gcsUrl, filename });

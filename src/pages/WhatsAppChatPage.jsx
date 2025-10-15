@@ -196,32 +196,15 @@ const WhatsAppChatPage = () => {
     }
   }, [selectedConversation, isLoadingOlderMessages, hasMoreMessages, offset]);
 
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async (searchTerm = '') => {
     try {
-      const initialConversations = await getConversations({ limit: 300 });
-
-      // Enrich conversations with last message preview
-      const enrichedConversations = await Promise.all(
-        initialConversations.map(async (convo) => {
-          try {
-            const detailedConvo = await getConversation(convo.id, { limit: 1 });
-            const lastMessage = detailedConvo?.messages?.[0];
-            return {
-              ...convo,
-              last_message_preview: lastMessage?.body || 'Último mensaje',
-            };
-          } catch (error) {
-            console.error(`Error fetching details for conversation ${convo.id}:`, error);
-            // Return the original conversation if details fetch fails
-            return {
-              ...convo,
-              last_message_preview: 'Error al cargar mensaje',
-            };
-          }
-        })
-      );
-
-      const sortedData = enrichedConversations.sort((a, b) => {
+      const params = {
+        limit: 10000, // Carga masiva única
+        search: searchTerm || undefined,
+      };
+      const allConversations = await getConversations(params);
+      
+      const sortedData = allConversations.sort((a, b) => {
         const timeA = a.updated_at ? new Date(a.updated_at) : new Date(0);
         const timeB = b.updated_at ? new Date(b.updated_at) : new Date(0);
         return timeB - timeA;
@@ -644,6 +627,7 @@ const WhatsAppChatPage = () => {
     <div className="flex h-full min-h-0 bg-transparent overflow-hidden" style={{background: 'transparent'}}>
       <WppConversationSidebar
         conversations={conversations}
+        isLoading={isLoadingMessages}
         selectedConversation={selectedConversation}
         onSelectConversation={(convo) => {
           initNotificationSound(); // Aseguramos la inicialización también al seleccionar una conversación
@@ -651,6 +635,7 @@ const WhatsAppChatPage = () => {
         }}
         userRole={userRole}
         onConversationInitiated={fetchConversations}
+        onSearch={fetchConversations}
       />
 
       <WppChatArea

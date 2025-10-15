@@ -1,236 +1,111 @@
-import React, { useState, useEffect } from 'react';
-import WppWindowCounter from './WppWindowCounter';
-import WppTagInputModal from './WppTagInputModal';
-import {
-  addTagToConversation,
-  assignConversation,
-  markConversationAsRead,
-  markConversationAsUnread
-} from '../services/api';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ConversationListItem from './ConversationListItem';
+import { getLastMessagesForConversations } from '../services/api';
 
-const WppConversationList = ({ conversations, selectedConversation, onSelectConversation, userRole }) => {
-  const [localConversations, setLocalConversations] = useState(conversations);
-  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, selectedConvo: null });
-  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
-  const [taggingConversationId, setTaggingConversationId] = useState(null);
+const MESSAGE_PAGE_SIZE = 20;
 
+const WppConversationList = ({
+  conversations,
+  selectedConversation,
+  onSelectConversation,
+  userRole,
+  onAddTag,
+  scrollContainerRef
+}) => {
+  const [lastMessages, setLastMessages] = useState({});
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false); // Para UI (spinner)
+  
+  const observer = useRef();
+  const requestedPages = useRef(new Set());
+  const isLoadingRef = useRef(false); // Para control de lógica síncrono
+
+  // 1. Resetear estado cuando la lista de conversaciones principal cambia (ej. por búsqueda)
   useEffect(() => {
-    setLocalConversations(conversations);
+    setLastMessages({});
+    setPage(1);
+    requestedPages.current.clear();
   }, [conversations]);
 
-  const handleAddTag = (conversationId) => {
-    setTaggingConversationId(conversationId);
-    setIsTagModalOpen(true);
-  };
+  const hasMore = (page * MESSAGE_PAGE_SIZE) < conversations.length;
 
-  const handleConfirmAddTag = async (tagName) => {
-    if (!taggingConversationId || !tagName) return;
-
-    try {
-      await addTagToConversation(taggingConversationId, tagName);
-      // For now, we reload to see the change. A better approach would be to update the state locally.
-      window.location.reload();
-    } catch (error) {
-      alert('Error al agregar etiqueta: ' + error.message);
-    } finally {
-      setIsTagModalOpen(false);
-      setTaggingConversationId(null);
-    }
-  };
-
-  const handleAssignConversation = async (conversationId) => {
-    const managerId = window.prompt('Ingrese el ID del gestor al que asignar la conversación:');
-    if (managerId && managerId.trim()) {
-      try {
-        await assignConversation(conversationId, managerId.trim());
-        alert('Conversación asignada exitosamente');
-        window.location.reload();
-      } catch (error) {
-        alert('Error al asignar conversación: ' + error.message);
-      }
-    }
-  };
-
-  const handleContextMenu = (event, convo) => {
-    event.preventDefault();
-    setContextMenu({
-      visible: true,
-      x: event.clientX,
-      y: event.clientY,
-      selectedConvo: convo,
-    });
-  };
-
-  const handleCloseContextMenu = () => {
-    setContextMenu({ ...contextMenu, visible: false });
-  };
-
-  const handleMarkAsUnread = async () => {
-    if (contextMenu.selectedConvo) {
-      try {
-        await markConversationAsUnread(contextMenu.selectedConvo.id);
-        setLocalConversations(prevConvos =>
-          prevConvos.map(c =>
-            c.id === contextMenu.selectedConvo.id ? { ...c, read_status: 'sent' } : c
-          )
-        );
-      } catch (error) {
-        console.error('Error al marcar la conversación como no leída:', error);
-      }
-    }
-    handleCloseContextMenu();
-  };
-
+  // 2. Efecto para cargar los mensajes de la página actual con lógica anti-race-condition
   useEffect(() => {
-    if (contextMenu.visible) {
-      document.addEventListener('click', handleCloseContextMenu);
-      return () => {
-        document.removeEventListener('click', handleCloseContextMenu);
-      };
+    // Guardia principal: Usamos la ref síncrona para un bloqueo inmediato y seguro.
+    if (isLoadingRef.current || conversations.length === 0 || requestedPages.current.has(page)) {
+      return;
     }
-  }, [contextMenu.visible]);
-  // Restaurar función para manejar click en conversación
-  const handleConversationClick = async (convo) => {
-    if (convo.read_status === 'sent') {
-      try {
-        await markConversationAsRead(convo.id);
-        setLocalConversations(prevConvos =>
-          prevConvos.map(c =>
-            c.id === convo.id ? { ...c, read_status: 'read' } : c
-          )
-        );
-      } catch (error) {
-        console.error('Error al marcar la conversación como leída:', error);
+
+    const fetchLastMessages = async () => {
+      // Bloqueo síncrono e inmediato
+      isLoadingRef.current = true;
+      requestedPages.current.add(page);
+      setIsLoading(true); // Actualizar UI
+
+      const startIndex = (page - 1) * MESSAGE_PAGE_SIZE;
+      const endIndex = page * MESSAGE_PAGE_SIZE;
+      const conversationsSlice = conversations.slice(startIndex, endIndex);
+      const conversationIds = conversationsSlice.map(c => c.id);
+
+      if (conversationIds.length > 0) {
+        console.log(`[WppConversationList] Fetching last messages for page ${page}. Conversation IDs:`, conversationIds);
+        try {
+          const messages = await getLastMessagesForConversations(conversationIds);
+          console.log(`[WppConversationList] Received ${Object.keys(messages).length} messages for page ${page}.`);
+          setLastMessages(prev => ({ ...prev, ...messages }));
+        } catch (error) {
+          console.error(`[WppConversationList] Error fetching last messages for page ${page}:`, error);
+          requestedPages.current.delete(page); // Permitir reintento si falla
+        } finally {
+          // Desbloqueo
+          isLoadingRef.current = false;
+          setIsLoading(false);
+        }
+      } else {
+        isLoadingRef.current = false;
+        setIsLoading(false);
       }
-    }
-    onSelectConversation(convo);
-  };
+    };
 
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    const today = new Date();
+    fetchLastMessages();
+  }, [page, conversations]); // Dependencias correctas, sin isLoading
+
+  // 3. Intersection Observer para el scroll infinito
+  const sentinelRef = useCallback(node => {
+    if (observer.current) observer.current.disconnect();
     
-    const isToday = date.getDate() === today.getDate() &&
-                  date.getMonth() === today.getMonth() &&
-                  date.getFullYear() === today.getFullYear();
+    observer.current = new IntersectionObserver(entries => {
+      // Usamos la ref de carga aquí también para seguridad
+      if (entries[0].isIntersecting && hasMore && !isLoadingRef.current) {
+        setPage(p => p + 1);
+      }
+    }, { root: scrollContainerRef.current });
 
-    if (isToday) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else {
-      return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
-    }
-  };
+    if (node) observer.current.observe(node);
+  }, [hasMore, scrollContainerRef]);
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50 rounded-xl p-2">
-      <ul className="space-y-3">
-        {localConversations.map((convo) => {
-          const isUnread = convo.read_status === 'sent';
-          const isSelected = selectedConversation?.id === convo.id;
-          return (
-            <li
-              key={convo.id}
-              className={`relative group shadow-sm rounded-2xl px-4 py-3 cursor-pointer transition-all border border-transparent ${
-                isSelected
-                  ? 'bg-white border-green-500 ring-2 ring-green-200'
-                  : 'bg-white hover:shadow-md hover:border-green-200'
-              }`}
-              onClick={() => handleConversationClick(convo)}
-              onContextMenu={(e) => handleContextMenu(e, convo)}
-            >
-              <div className="flex justify-between items-start mb-1">
-                <div className="flex-1 min-w-0">
-                  <h3 className={`font-semibold truncate text-base ${isUnread ? 'text-green-700 font-bold' : 'text-gray-700'}`}>{convo.chat_title}</h3>
-                  <p className={`text-sm truncate ${isUnread ? 'text-green-800' : 'text-gray-500'}`}>{convo.customer_phone_number}</p>
-                </div>
-                <div className="flex flex-col items-end ml-2 flex-shrink-0">
-                  <span className="text-xs text-gray-400">
-                    {formatTimestamp(convo.updated_at)}
-                  </span>
-                  <WppWindowCounter lastClientMessageAt={convo.last_client_message_at} />
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <p className={`text-sm truncate ${isUnread ? 'text-green-800 font-semibold' : 'text-gray-500'}`}>{convo.last_message_preview || 'Último mensaje'}</p>
-                {isUnread && (
-                  <span className="ml-2 flex-shrink-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white shadow"></span>
-                )}
-              </div>
-              {(userRole === 'coordinador' || userRole === 'gestor' || userRole === 'Admin') && (
-                <div className="flex items-center flex-wrap gap-2 ml-1 mt-3">
-                  {convo.tags && convo.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {convo.tags.slice(0, 2).map((tag) => (
-                        <span
-                          key={tag.id}
-                          className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full font-medium border border-blue-200 shadow-sm"
-                        >
-                          {tag.name}
-                        </span>
-                      ))}
-                      {convo.tags.length > 2 && (
-                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full border border-gray-200 font-medium shadow-sm">
-                          +{convo.tags.length - 2}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {userRole === 'coordinador' && !convo.assigned_to_id && (
-                    <button
-                      className="text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-full px-2 py-0.5 border border-orange-200 font-medium shadow-sm transition"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAssignConversation(convo.id);
-                      }}
-                      title="Asignar a gestor"
-                    >
-                      Asignar
-                    </button>
-                  )}
-                  {(userRole === 'gestor' || userRole === 'Admin') && (
-                    <button
-                      className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full w-6 h-6 flex items-center justify-center border border-gray-200 font-bold shadow-sm transition"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAddTag(convo.id);
-                      }}
-                      title="Agregar etiqueta"
-                    >
-                      +
-                    </button>
-                  )}
-                </div>
-              )}
-              {/* Sombra y borde para el estado seleccionado */}
-              {isSelected && (
-                <span className="absolute top-2 right-2 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full border border-green-200 shadow-sm">Seleccionado</span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      {contextMenu.visible && (
-        <div
-          className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[180px]"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-        >
-          <button
-            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded"
-            onClick={handleMarkAsUnread}
-          >
-            Marcar como no leído
-          </button>
-        </div>
-      )}
-
-      <WppTagInputModal
-        isOpen={isTagModalOpen}
-        onClose={() => setIsTagModalOpen(false)}
-        onSubmit={handleConfirmAddTag}
-      />
+      <div className="space-y-1">
+        {conversations.map((convo) => (
+          <ConversationListItem
+            key={convo.id}
+            conversation={convo}
+            lastMessage={lastMessages[convo.id]}
+            isSelected={selectedConversation?.id === convo.id}
+            onSelect={onSelectConversation}
+            userRole={userRole}
+            onAddTag={onAddTag}
+          />
+        ))}
+        {hasMore && (
+          <div ref={sentinelRef} style={{ height: '50px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            {isLoading && <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-500"></div>}
+          </div>
+        )}
+      </div>
     </div>
   );
-}
+};
 
 export default WppConversationList;
