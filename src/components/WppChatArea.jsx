@@ -31,7 +31,7 @@ const WppChatArea = ({
   handleViewInAdminfo
 }) => {
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-transparent" style={{background: 'transparent'}}>
+    <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-transparent" style={{background: 'transparent', overflow: 'hidden'}}>
       <WppChatHeader
         selectedConversation={selectedConversation}
         adminfoData={adminfoData}

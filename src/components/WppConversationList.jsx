@@ -11,6 +11,7 @@ const WppConversationList = ({
   onLoadMore,
   hasMore,
   isLoading,
+  onContextMenu,
 }) => {
   const observer = useRef();
 
@@ -38,6 +39,7 @@ const WppConversationList = ({
             onSelect={onSelectConversation}
             userRole={userRole}
             onAddTag={onAddTag}
+            onContextMenu={onContextMenu}
           />
         ))}
         {hasMore && (

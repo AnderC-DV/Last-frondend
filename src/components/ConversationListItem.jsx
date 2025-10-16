@@ -3,7 +3,7 @@ import { format, isToday, isYesterday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import WppWindowCounter from './WppWindowCounter';
 
-const ConversationListItem = ({ conversation, isSelected, onSelect, userRole, onAddTag }) => {
+const ConversationListItem = ({ conversation, isSelected, onSelect, userRole, onAddTag, onContextMenu }) => {
   const lastMessage = conversation.messages && conversation.messages.length > 0 ? conversation.messages[0] : null;
 
   const formatDate = (timestamp) => {
@@ -47,6 +47,7 @@ const ConversationListItem = ({ conversation, isSelected, onSelect, userRole, on
   return (
     <div
       onClick={() => onSelect(conversation)}
+      onContextMenu={(e) => onContextMenu(e, conversation)}
       className={`relative group shadow-sm rounded-2xl px-4 py-3 cursor-pointer transition-all border border-transparent ${
         isSelected
           ? 'bg-white border-green-500 ring-2 ring-green-200'

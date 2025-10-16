@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WppConversationList from './WppConversationList';
 import InitiateConversationModal from './InitiateConversationModal';
 import WppTagInputModal from './WppTagInputModal';
-import { getConversations, addTagToConversation } from '../services/api';
+import { getConversations, addTagToConversation, markConversationAsUnread } from '../services/api';
 import useDebounce from '../hooks/useDebounce';
 
 const CONVERSATION_PAGE_SIZE = 50;
@@ -27,6 +27,7 @@ const WppConversationSidebar = ({
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const [taggingConversationId, setTaggingConversationId] = useState(null);
 
+  const [contextMenu, setContextMenu] = useState(null);
   const scrollContainerRef = useRef(null);
 
   // 1. Carga única de todas las conversaciones
@@ -54,6 +55,20 @@ const WppConversationSidebar = ({
   useEffect(() => {
     fetchAllConversations(debouncedSearchTerm);
   }, [debouncedSearchTerm, fetchAllConversations]);
+
+  // Efecto para cerrar el menú contextual al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (contextMenu) {
+        setContextMenu(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [contextMenu]);
 
   // 2. Carga progresiva desde el estado local
   const handleLoadMore = useCallback(() => {
@@ -83,17 +98,39 @@ const WppConversationSidebar = ({
     if (!taggingConversationId || !tagName) return;
     try {
       await addTagToConversation(taggingConversationId, tagName);
-      // Instead of reload, we should refetch or update state ideally
-      setConversations([]);
-      setPage(1);
-      setHasMore(true);
-      fetchConversations(true);
+      // Refrescar la lista de conversaciones para mostrar la nueva etiqueta
+      fetchAllConversations(debouncedSearchTerm);
     } catch (error) {
       alert('Error al agregar etiqueta: ' + error.message);
     } finally {
       setIsTagModalOpen(false);
       setTaggingConversationId(null);
     }
+  };
+
+  const handleMarkAsUnread = async (conversationId) => {
+    try {
+      await markConversationAsUnread(conversationId);
+      const updateConversations = (conversations) =>
+        conversations.map(c =>
+          c.id === conversationId ? { ...c, read_status: 'sent' } : c
+        );
+      setAllConversations(updateConversations);
+      setVisibleConversations(updateConversations);
+    } catch (error) {
+      alert('Error al marcar como no leído: ' + error.message);
+    } finally {
+      setContextMenu(null);
+    }
+  };
+
+  const handleContextMenu = (event, conversation) => {
+    event.preventDefault();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      conversationId: conversation.id,
+    });
   };
 
   const getButtonClass = (filterName) => (
@@ -138,8 +175,23 @@ const WppConversationSidebar = ({
           onLoadMore={handleLoadMore}
           hasMore={hasMore}
           isLoading={isLoading}
+          onContextMenu={handleContextMenu}
         />
       </div>
+      {contextMenu && (
+        <div
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="absolute z-50 bg-white rounded-md shadow-lg border"
+          onMouseLeave={() => setContextMenu(null)}
+        >
+          <button
+            onClick={() => handleMarkAsUnread(contextMenu.conversationId)}
+            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+          >
+            Marcar como no leído
+          </button>
+        </div>
+      )}
       <WppTagInputModal
         isOpen={isTagModalOpen}
         onClose={() => setIsTagModalOpen(false)}
