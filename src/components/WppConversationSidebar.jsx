@@ -1,28 +1,23 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import WppConversationList from './WppConversationList';
 import InitiateConversationModal from './InitiateConversationModal';
 import WppTagInputModal from './WppTagInputModal';
-import { getConversations, addTagToConversation, markConversationAsUnread } from '../services/api';
-import useDebounce from '../hooks/useDebounce';
-
-const CONVERSATION_PAGE_SIZE = 50;
+import { addTagToConversation, markConversationAsUnread } from '../services/api';
 
 const WppConversationSidebar = ({
+  conversations,
+  isLoading,
   selectedConversation,
   onSelectConversation,
   userRole,
   onConversationInitiated,
+  onSearch,
+  onLoadMore,
+  hasMore,
 }) => {
-  const [allConversations, setAllConversations] = useState([]);
-  const [visibleConversations, setVisibleConversations] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-
   const [activeFilter, setActiveFilter] = useState('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const [taggingConversationId, setTaggingConversationId] = useState(null);
@@ -30,64 +25,17 @@ const WppConversationSidebar = ({
   const [contextMenu, setContextMenu] = useState(null);
   const scrollContainerRef = useRef(null);
 
-  // 1. Carga única de todas las conversaciones
-  const fetchAllConversations = useCallback(async (searchTerm) => {
-    setIsLoading(true);
-    try {
-      const params = {
-        limit: 10000, // Límite muy alto para traer todo
-        search: searchTerm || undefined,
-      };
-      const conversationsData = await getConversations(params);
-      setAllConversations(conversationsData);
-      // Mostrar el primer lote inmediatamente
-      setVisibleConversations(conversationsData.slice(0, CONVERSATION_PAGE_SIZE));
-      setPage(2); // Preparar para la siguiente página
-      setHasMore(conversationsData.length > CONVERSATION_PAGE_SIZE);
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-    } finally {
-      setIsLoading(false);
+  useEffect(() => {
+    onSearch(searchTerm);
+  }, [searchTerm, onSearch]);
+
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    if (contextMenu) {
+      window.addEventListener('click', handleClickOutside);
     }
-  }, []);
-
-  // Efecto para la carga inicial y la búsqueda
-  useEffect(() => {
-    fetchAllConversations(debouncedSearchTerm);
-  }, [debouncedSearchTerm, fetchAllConversations]);
-
-  // Efecto para cerrar el menú contextual al hacer clic fuera
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (contextMenu) {
-        setContextMenu(null);
-      }
-    };
-
-    document.addEventListener('click', handleClickOutside);
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
+    return () => window.removeEventListener('click', handleClickOutside);
   }, [contextMenu]);
-
-  // 2. Carga progresiva desde el estado local
-  const handleLoadMore = useCallback(() => {
-    if (!hasMore || isLoading) return;
-
-    const nextPage = page;
-    const startIndex = (nextPage - 1) * CONVERSATION_PAGE_SIZE;
-    const endIndex = nextPage * CONVERSATION_PAGE_SIZE;
-    
-    const newVisibleConversations = allConversations.slice(startIndex, endIndex);
-
-    if (newVisibleConversations.length > 0) {
-      setVisibleConversations(prev => [...prev, ...newVisibleConversations]);
-      setPage(nextPage + 1);
-    }
-    
-    setHasMore(endIndex < allConversations.length);
-
-  }, [page, hasMore, isLoading, allConversations]);
 
   const handleAddTag = (conversationId) => {
     setTaggingConversationId(conversationId);
@@ -98,8 +46,7 @@ const WppConversationSidebar = ({
     if (!taggingConversationId || !tagName) return;
     try {
       await addTagToConversation(taggingConversationId, tagName);
-      // Refrescar la lista de conversaciones para mostrar la nueva etiqueta
-      fetchAllConversations(debouncedSearchTerm);
+      onConversationInitiated(); // Re-fetch all conversations
     } catch (error) {
       alert('Error al agregar etiqueta: ' + error.message);
     } finally {
@@ -111,12 +58,7 @@ const WppConversationSidebar = ({
   const handleMarkAsUnread = async (conversationId) => {
     try {
       await markConversationAsUnread(conversationId);
-      const updateConversations = (conversations) =>
-        conversations.map(c =>
-          c.id === conversationId ? { ...c, read_status: 'sent' } : c
-        );
-      setAllConversations(updateConversations);
-      setVisibleConversations(updateConversations);
+      onConversationInitiated(); // Re-fetch all conversations
     } catch (error) {
       alert('Error al marcar como no leído: ' + error.message);
     } finally {
@@ -126,6 +68,7 @@ const WppConversationSidebar = ({
 
   const handleContextMenu = (event, conversation) => {
     event.preventDefault();
+    event.stopPropagation();
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
@@ -166,13 +109,13 @@ const WppConversationSidebar = ({
       </div>
       <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto">
         <WppConversationList
-          conversations={visibleConversations}
+          conversations={conversations}
           selectedConversation={selectedConversation}
           onSelectConversation={onSelectConversation}
           userRole={userRole}
           onAddTag={handleAddTag}
           scrollContainerRef={scrollContainerRef}
-          onLoadMore={handleLoadMore}
+          onLoadMore={onLoadMore}
           hasMore={hasMore}
           isLoading={isLoading}
           onContextMenu={handleContextMenu}

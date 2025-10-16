@@ -10,9 +10,11 @@ import {
   sendAudioFromGCS,
   sendDocumentFromGCS,
   sendStickerFromGCS,
-  sendTemplatedMessage
+  sendTemplatedMessage,
+  markConversationAsRead
 } from '../services/api';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
+import useDebounce from '../hooks/useDebounce';
 import ExpiredSessionModal from '../components/ExpiredSessionModal';
 import WppConversationSidebar from '../components/WppConversationSidebar';
 import WppChatArea from '../components/WppChatArea';
@@ -29,14 +31,22 @@ const WhatsAppChatPage = () => {
   const userRole = user?.decoded?.role || 'gestor'; // Default to gestor if not set
   const { play: playNotificationSound, init: initNotificationSound } = useSound('/new-notificationWpp.mp3');
 
-  const [conversations, setConversations] = useState([]);
+  const [allConversations, setAllConversations] = useState([]);
+  const [visibleConversations, setVisibleConversations] = useState([]);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+  const [conversationPage, setConversationPage] = useState(1);
+  const [hasMoreConversations, setHasMoreConversations] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [previewFileUrl, setPreviewFileUrl] = useState(null);
   const [selectedMediaFile, setSelectedMediaFile] = useState(null);
   const [mediaType, setMediaType] = useState('');
-  const [messagesCache, setMessagesCache] = useState({});
+  const [messagesCache, setMessagesCache] = useState({}); // Cache de mensajes
+  const messageCacheLimitRef = useRef(5); // Máximo 5 conversaciones cacheadas
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [selectedObligation, setSelectedObligation] = useState(null);
@@ -57,6 +67,7 @@ const WhatsAppChatPage = () => {
 
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const loadOlderMessagesTimeoutRef = useRef(null); // Para debouncing
 
   // Refs to hold current values for the WebSocket handler
   const selectedConversationRef = useRef(selectedConversation);
@@ -90,6 +101,23 @@ const WhatsAppChatPage = () => {
       delete window.debugPaginationState;
     };
   }, [debugPaginationState]);
+
+  // Función helper para actualizar cache con límite de 5 conversaciones
+  const updateMessagesCache = useCallback((conversationId, messages) => {
+    setMessagesCache(prevCache => {
+      const newCache = { ...prevCache };
+      const cacheKeys = Object.keys(newCache);
+
+      // Si ya tenemos 5 conversaciones y esta es nueva, eliminar la más antigua
+      if (cacheKeys.length >= messageCacheLimitRef.current && !newCache[conversationId]) {
+        const oldestKey = cacheKeys[0];
+        delete newCache[oldestKey];
+      }
+
+      newCache[conversationId] = messages;
+      return newCache;
+    });
+  }, []);
 
   // Efecto para inicializar el audio en la primera interacción del usuario
   useEffect(() => {
@@ -136,66 +164,131 @@ const WhatsAppChatPage = () => {
   const loadOlderMessages = useCallback(async () => {
     if (!selectedConversation || isLoadingOlderMessages || !hasMoreMessages) return;
 
-    setIsLoadingOlderMessages(true);
-    console.debug('[Pagination] Loading older messages for conversation:', selectedConversation.id, 'offset:', offset);
+    // DEBOUNCING: Si hay un timeout pendiente, cancelarlo y resetear
+    if (loadOlderMessagesTimeoutRef.current) {
+      clearTimeout(loadOlderMessagesTimeoutRef.current);
+    }
 
-    try {
-      // Cargar la siguiente página de mensajes usando offset
-      const conversationData = await getConversation(selectedConversation.id, {
-        limit: 20,
-        offset: offset
-      });
+    // Solo ejecutar una vez cada 500ms (evita múltiples llamadas simultáneas)
+    loadOlderMessagesTimeoutRef.current = setTimeout(async () => {
+      setIsLoadingOlderMessages(true);
+      console.debug('[Pagination] Loading older messages for conversation:', selectedConversation.id, 'offset:', offset);
 
-      if (conversationData && conversationData.messages && Array.isArray(conversationData.messages)) {
-        const olderMessages = conversationData.messages;
-        console.debug(`[Pagination] Loaded ${olderMessages.length} older messages`);
+      try {
+        // Cargar la siguiente página de mensajes usando offset
+        const conversationData = await getConversation(selectedConversation.id, {
+          limit: 20,
+          offset: offset
+        });
 
-        if (olderMessages.length > 0) {
-          // Guardar el scroll actual antes de agregar mensajes
-          const container = messagesContainerRef.current;
-          const previousScrollHeight = container.scrollHeight;
+        if (conversationData && conversationData.messages && Array.isArray(conversationData.messages)) {
+          const olderMessages = conversationData.messages;
+          console.debug(`[Pagination] Loaded ${olderMessages.length} older messages`);
 
-          // Agregar mensajes antiguos al inicio
-          // Agregar mensajes antiguos al inicio, evitando duplicados
-          setMessages(prevMessages => {
-            const existingIds = new Set(prevMessages.map(m => m.id || m.message_id));
-            const uniqueOlderMessages = olderMessages.filter(m => !existingIds.has(m.id || m.message_id));
-            return [...uniqueOlderMessages, ...prevMessages];
-          });
+          if (olderMessages.length > 0) {
+            // Guardar el scroll actual antes de agregar mensajes
+            const container = messagesContainerRef.current;
+            const previousScrollHeight = container.scrollHeight;
 
-          // Actualizar offset para la próxima carga
-          setOffset(prev => prev + 20);
+            // Agregar mensajes antiguos al inicio, evitando duplicados
+            setMessages(prevMessages => {
+              const existingIds = new Set(prevMessages.map(m => m.id || m.message_id));
+              const uniqueOlderMessages = olderMessages.filter(m => !existingIds.has(m.id || m.message_id));
+              return [...uniqueOlderMessages, ...prevMessages];
+            });
 
-          // Actualizar hasMoreMessages basado en la respuesta del backend
-          setHasMoreMessages(conversationData.has_more || false);
+            // Actualizar offset para la próxima carga
+            setOffset(prev => prev + 20);
 
-          // Restaurar la posición del scroll después de agregar mensajes
-          setTimeout(() => {
-            if (container) {
-              const newScrollHeight = container.scrollHeight;
-              const scrollDifference = newScrollHeight - previousScrollHeight;
-              container.scrollTop = scrollDifference;
-            }
-          }, 100);
+            // Actualizar hasMoreMessages basado en la respuesta del backend
+            setHasMoreMessages(conversationData.has_more || false);
 
-          console.debug(`[Pagination] Updated offset to: ${offset + 50}`);
-          console.debug(`[Pagination] Has more messages: ${conversationData.has_more}`);
+            // Restaurar la posición del scroll después de agregar mensajes
+            setTimeout(() => {
+              if (container) {
+                const newScrollHeight = container.scrollHeight;
+                const scrollDifference = newScrollHeight - previousScrollHeight;
+                container.scrollTop = scrollDifference;
+              }
+            }, 100);
+
+            console.debug(`[Pagination] Updated offset to: ${offset + 50}`);
+            console.debug(`[Pagination] Has more messages: ${conversationData.has_more}`);
+          } else {
+            setHasMoreMessages(false);
+            console.debug('[Pagination] No older messages found');
+          }
         } else {
           setHasMoreMessages(false);
-          console.debug('[Pagination] No older messages found');
+          console.debug('[Pagination] Invalid response format');
         }
-      } else {
+      } catch (error) {
+        console.error('[Pagination] Error loading older messages:', error);
         setHasMoreMessages(false);
-        console.debug('[Pagination] Invalid response format');
+      } finally {
+        setIsLoadingOlderMessages(false);
       }
-    } catch (error) {
-      console.error('[Pagination] Error loading older messages:', error);
-      setHasMoreMessages(false);
-    } finally {
-      setIsLoadingOlderMessages(false);
-    }
+    }, 500); // Esperar 500ms antes de ejecutar
   }, [selectedConversation, isLoadingOlderMessages, hasMoreMessages, offset]);
 
+  const CONVERSATION_PAGE_SIZE = 50;
+
+  const fetchAllConversations = useCallback(async (currentSearchTerm) => {
+    setIsLoadingConversations(true);
+    try {
+      const params = {
+        limit: 10000,
+        search: currentSearchTerm || undefined,
+      };
+      const conversationsData = await getConversations(params);
+      setAllConversations(conversationsData);
+      setVisibleConversations(conversationsData.slice(0, CONVERSATION_PAGE_SIZE));
+      setConversationPage(2);
+      setHasMoreConversations(conversationsData.length > CONVERSATION_PAGE_SIZE);
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAllConversations(debouncedSearchTerm);
+  }, [debouncedSearchTerm, fetchAllConversations]);
+
+  const handleLoadMoreConversations = useCallback(() => {
+    if (!hasMoreConversations || isLoadingConversations) return;
+
+    const nextPage = conversationPage;
+    const startIndex = (nextPage - 1) * CONVERSATION_PAGE_SIZE;
+    const endIndex = nextPage * CONVERSATION_PAGE_SIZE;
+    
+    const newVisible = allConversations.slice(startIndex, endIndex);
+
+    if (newVisible.length > 0) {
+      setVisibleConversations(prev => [...prev, ...newVisible]);
+      setConversationPage(nextPage + 1);
+    }
+    
+    setHasMoreConversations(endIndex < allConversations.length);
+  }, [conversationPage, hasMoreConversations, isLoadingConversations, allConversations]);
+
+  const handleSelectConversation = useCallback(async (convo) => {
+    if (convo.read_status === 'sent') {
+      try {
+        await markConversationAsRead(convo.id);
+        const updateConversations = (conversations) =>
+          conversations.map(c =>
+            c.id === convo.id ? { ...c, read_status: 'read' } : c
+          );
+        setAllConversations(updateConversations);
+        setVisibleConversations(updateConversations);
+      } catch (error) {
+        console.error("Error marking conversation as read", error);
+      }
+    }
+    setSelectedConversation(convo);
+  }, []);
 
   // Efecto para cargar los mensajes iniciales de una conversación
   useEffect(() => {
@@ -298,7 +391,7 @@ const WhatsAppChatPage = () => {
         playNotificationSound();
       }
 
-      setConversations(prev => {
+      const updateConvoList = (prev) => {
         const convoIndex = prev.findIndex(c => c.id === newMessage.conversation_id);
         if (convoIndex === -1) return prev;
 
@@ -306,17 +399,19 @@ const WhatsAppChatPage = () => {
 
         const updatedConvo = {
           ...prev[convoIndex],
-          last_message_preview: newMessage.body || `[${newMessage.type}]`,
+          messages: [newMessage], // Actualizamos con el último mensaje
           updated_at: newMessage.timestamp,
-          // Solo actualizamos last_client_message_at si el mensaje es del cliente
           last_client_message_at: newMessage.direction === 'inbound' ? newMessage.timestamp : prev[convoIndex].last_client_message_at,
           read_status: isConversationSelected ? 'read' : 'sent',
         };
 
         const newConversations = [...prev];
         newConversations.splice(convoIndex, 1);
-        return [updatedConvo, ...newConversations];
-      });
+        return [updatedConvo, ...newConversations].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      };
+
+      setAllConversations(updateConvoList);
+      setVisibleConversations(updateConvoList);
 
       setMessagesCache(prevCache => {
         const currentMessages = prevCache[newMessage.conversation_id] || [];
@@ -422,21 +517,7 @@ const WhatsAppChatPage = () => {
       setNewMessage('');
       setTimeout(scrollToBottom, 100);
 
-      // Optimistic update for conversation list
-      setConversations(prev => {
-        const convoIndex = prev.findIndex(c => c.id === selectedConversation.id);
-        if (convoIndex === -1) return prev;
-
-        const updatedConvo = {
-          ...prev[convoIndex],
-          last_message_preview: messageToSend,
-          updated_at: optimisticMessage.timestamp,
-        };
-
-        const newConversations = [...prev];
-        newConversations.splice(convoIndex, 1);
-        return [updatedConvo, ...newConversations];
-      });
+      // Optimistic update for conversation list (ya no es necesario con WebSocket)
 
       try {
         const messageData = {
@@ -603,15 +684,15 @@ const WhatsAppChatPage = () => {
   return (
     <div className="flex h-full min-h-0 bg-transparent overflow-hidden" style={{background: 'transparent'}}>
       <WppConversationSidebar
+        conversations={visibleConversations}
+        isLoading={isLoadingConversations}
         selectedConversation={selectedConversation}
-        onSelectConversation={(convo) => {
-          initNotificationSound(); // Aseguramos la inicialización también al seleccionar una conversación
-          setSelectedConversation(convo);
-        }}
+        onSelectConversation={handleSelectConversation}
         userRole={userRole}
-        onConversationInitiated={() => {
-          // La recarga ahora es manejada internamente por el Sidebar
-        }}
+        onConversationInitiated={() => fetchAllConversations(debouncedSearchTerm)}
+        onSearch={setSearchTerm}
+        onLoadMore={handleLoadMoreConversations}
+        hasMore={hasMoreConversations}
       />
 
       <WppChatArea

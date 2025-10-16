@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import WppMessageContent from './WppMessageContent';
 import WppMessageStatus from './WppMessageStatus';
 import WppScrollToBottomButton from './WppScrollToBottomButton';
@@ -40,6 +40,8 @@ const WppMessageList = ({
   const messagesContainerRef = useRef(null);
   const loaderRef = useRef(null); // Ref para el elemento "centinela"
   const prevScrollHeightRef = useRef(null); // Ref para guardar el scrollHeight anterior
+  const isInitialLoadRef = useRef(true); // Ref para evitar carga automática en primer render
+  const observerTimeoutRef = useRef(null); // Timeout para delayed observer
 
   // Hook para hacer scroll al final cuando se selecciona una nueva conversación
   useEffect(() => {
@@ -62,13 +64,18 @@ const WppMessageList = ({
     }
   }, [messages]); // Se ejecuta cada vez que los mensajes cambian
 
-  // Hook para el Intersection Observer
+  // Hook para el Intersection Observer - CON DELAY para evitar race condition
   useEffect(() => {
+    // Limpiar timeout anterior si existe
+    if (observerTimeoutRef.current) {
+      clearTimeout(observerTimeoutRef.current);
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         const firstEntry = entries[0];
-        // Si el centinela es visible, hay más mensajes y no estamos cargando, entonces cargamos más.
-        if (firstEntry.isIntersecting && hasMoreMessages && !isLoadingOlderMessages) {
+        // Solo cargar si: centinela visible + hay más msgs + no está cargando + NO es carga inicial
+        if (firstEntry.isIntersecting && hasMoreMessages && !isLoadingOlderMessages && !isInitialLoadRef.current) {
           // Guardamos el scrollHeight actual ANTES de que se carguen los nuevos mensajes
           if (messagesContainerRef.current) {
             prevScrollHeightRef.current = messagesContainerRef.current.scrollHeight;
@@ -80,17 +87,39 @@ const WppMessageList = ({
     );
 
     const currentLoader = loaderRef.current;
-    if (currentLoader) {
-      observer.observe(currentLoader);
-    }
+    
+    // DELAY de 800ms para que los últimos 20 mensajes se rendericen sin competencia
+    observerTimeoutRef.current = setTimeout(() => {
+      if (currentLoader) {
+        observer.observe(currentLoader);
+      }
+      isInitialLoadRef.current = false; // Activar IntersectionObserver después del delay
+    }, 800);
 
     // Limpieza: desconectar el observador cuando el componente se desmonte
     return () => {
+      if (observerTimeoutRef.current) {
+        clearTimeout(observerTimeoutRef.current);
+      }
       if (currentLoader) {
         observer.unobserve(currentLoader);
       }
     };
   }, [hasMoreMessages, isLoadingOlderMessages, onLoadOlderMessages]);
+
+  // Memoizar la agrupación de mensajes por día (FUERA del render para cumplir regla de hooks)
+  const messagesByDay = useMemo(() => {
+    if (!selectedConversation || messages.length === 0) return {};
+    
+    return messages.reduce((groups, msg, index) => {
+      const day = getMessageDay(msg.timestamp);
+      if (!groups[day]) {
+        groups[day] = [];
+      }
+      groups[day].push({ msg, index });
+      return groups;
+    }, {});
+  }, [messages, selectedConversation]);
 
   return (
     <div
@@ -133,19 +162,7 @@ const WppMessageList = ({
       )}
 
       {/* Mensajes solo si hay conversación seleccionada */}
-      {selectedConversation && (() => {
-        // Agrupar mensajes por día
-        const messagesByDay = messages.reduce((groups, msg, index) => {
-          const day = getMessageDay(msg.timestamp);
-          if (!groups[day]) {
-            groups[day] = [];
-          }
-          groups[day].push({ msg, index });
-          return groups;
-        }, {});
-
-        // Renderizar cada grupo de día como un contenedor sticky
-        return Object.entries(messagesByDay).map(([day, dayMessages]) => (
+      {selectedConversation && Object.entries(messagesByDay).map(([day, dayMessages]) => (
           <div key={`day-group-${day}`} className="mb-4">
             {/* Sticky Day Marker */}
             <div className="sticky top-0 z-10 flex justify-center py-2 pointer-events-none select-none">
@@ -197,8 +214,7 @@ const WppMessageList = ({
               );
             })}
           </div>
-        ));
-      })()}
+        ))}
       <div ref={messagesEndRef} />
 
       {/* Botón flotante para ir al último mensaje - dentro del área de conversación */}
@@ -212,4 +228,4 @@ const WppMessageList = ({
   );
 };
 
-export default WppMessageList;
+export default React.memo(WppMessageList);

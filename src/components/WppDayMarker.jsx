@@ -56,4 +56,4 @@ const WppDayMarker = ({ timestamp }) => {
   );
 };
 
-export default WppDayMarker;
+export default React.memo(WppDayMarker);

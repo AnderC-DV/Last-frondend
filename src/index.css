@@ -1,11 +1,1 @@
 @import "tailwindcss";
-
-/* Prevenir scroll a nivel de body/html para evitar deformaciones del header */
-html,
-body {
-  overflow: hidden;
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  width: 100%;
-}
