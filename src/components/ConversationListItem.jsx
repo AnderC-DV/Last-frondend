@@ -6,6 +6,26 @@ import WppWindowCounter from './WppWindowCounter';
 const ConversationListItem = ({ conversation, isSelected, onSelect, userRole, onAddTag, onContextMenu }) => {
   const lastMessage = conversation.messages && conversation.messages.length > 0 ? conversation.messages[0] : null;
 
+  const resolveMessageType = (message) => {
+    if (!message) return null;
+    const rawType = message.message_type || message.type || message.kind || message.media?.type || message.payload?.type;
+    return typeof rawType === 'string' ? rawType.toLowerCase() : null;
+  };
+
+  const resolveMessageBody = (message) => {
+    if (!message) return '';
+    return (
+      message.body ??
+      message.text ??
+      message.text?.body ??
+      message.caption ??
+      message.media?.caption ??
+      message.interactive?.body ??
+      message.interactive?.text ??
+      ''
+    );
+  };
+
   const formatDate = (timestamp) => {
     if (!timestamp) return null;
     const date = new Date(timestamp);
@@ -19,26 +39,36 @@ const ConversationListItem = ({ conversation, isSelected, onSelect, userRole, on
   const renderSmartPreview = () => {
     const truncate = (text, length = 35) => (text && text.length > length ? text.substring(0, length) + '...' : text);
 
-    if (lastMessage) {
-      switch (lastMessage.message_type) {
-        case 'text':
-          return truncate(lastMessage.body);
-        case 'image':
-          return '📷 Imagen';
-        case 'video':
-          return '📹 Video';
-        case 'audio':
-          return '🎵 Audio';
-        case 'document':
-          return '📄 Documento';
-        case 'sticker':
-          return '✨ Sticker';
-        default:
-          return '[Mensaje no soportado]';
-      }
+    if (!lastMessage) {
+      return '...';
     }
-    
-    return '...';
+
+    const messageType = resolveMessageType(lastMessage);
+    const messageBody = resolveMessageBody(lastMessage);
+
+    switch (messageType) {
+      case 'text':
+        return truncate(messageBody || '[Mensaje sin contenido]');
+      case 'image':
+        return '📷 Imagen';
+      case 'video':
+        return '📹 Video';
+      case 'audio':
+        return '🎵 Audio';
+      case 'document':
+        return '📄 Documento';
+      case 'sticker':
+        return '✨ Sticker';
+      case 'template':
+        return '🧩 Plantilla';
+      case 'location':
+        return '📍 Ubicación';
+      default:
+        if (messageBody) {
+          return truncate(messageBody);
+        }
+        return '[Mensaje no soportado]';
+    }
   };
 
   const displayTimestamp = lastMessage?.timestamp || conversation.updated_at;

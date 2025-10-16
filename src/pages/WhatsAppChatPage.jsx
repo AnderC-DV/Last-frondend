@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   getConversations,
   sendMessage,
@@ -37,6 +37,7 @@ const WhatsAppChatPage = () => {
   const [conversationPage, setConversationPage] = useState(1);
   const [hasMoreConversations, setHasMoreConversations] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] = useState('Todos');
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   const [selectedConversation, setSelectedConversation] = useState(null);
@@ -233,18 +234,84 @@ const WhatsAppChatPage = () => {
 
   const CONVERSATION_PAGE_SIZE = 50;
 
-  const fetchAllConversations = useCallback(async (currentSearchTerm) => {
+  const filteredConversations = useMemo(() => {
+    const term = debouncedSearchTerm.trim().toLowerCase();
+    const hasTerm = term.length > 0;
+
+    const normalize = (value) => {
+      if (value === null || value === undefined) return '';
+      return value.toString().toLowerCase();
+    };
+
+    const resolveMessageBody = (message) => (
+      message?.body ??
+      message?.text ??
+      message?.text?.body ??
+      message?.caption ??
+      message?.media?.caption ??
+      message?.interactive?.body ??
+      message?.interactive?.text ??
+      ''
+    );
+
+    const resolveMessageType = (message) => {
+      if (!message) return '';
+      const raw = message.message_type || message.type || message.kind || message.media?.type || message.payload?.type;
+      return typeof raw === 'string' ? raw.toLowerCase() : '';
+    };
+
+    return allConversations.filter((conversation) => {
+      const matchesFilter = (() => {
+        switch (activeFilter) {
+          case 'Nuevos':
+            return conversation.read_status === 'sent';
+          case 'Activos':
+            return conversation.read_status === 'read';
+          default:
+            return true;
+        }
+      })();
+
+      if (!matchesFilter) {
+        return false;
+      }
+
+      if (!hasTerm) {
+        return true;
+      }
+
+      const lastMessage = conversation.messages && conversation.messages.length > 0 ? conversation.messages[0] : null;
+      const searchPool = [
+        conversation.chat_title,
+        conversation.customer_phone_number,
+        conversation.client_cedula,
+        conversation.client_name,
+        conversation.customer_name,
+        resolveMessageBody(lastMessage),
+        resolveMessageType(lastMessage),
+      ];
+
+      const basicMatch = searchPool.some((value) => normalize(value).includes(term));
+      const tagsMatch = Array.isArray(conversation.tags)
+        ? conversation.tags.some((tag) => normalize(tag.name).includes(term))
+        : false;
+
+      return basicMatch || tagsMatch;
+    });
+  }, [allConversations, debouncedSearchTerm, activeFilter]);
+
+  useEffect(() => {
+    const initialPage = filteredConversations.slice(0, CONVERSATION_PAGE_SIZE);
+    setVisibleConversations(initialPage);
+    setConversationPage(2);
+    setHasMoreConversations(filteredConversations.length > CONVERSATION_PAGE_SIZE);
+  }, [filteredConversations]);
+
+  const fetchAllConversations = useCallback(async () => {
     setIsLoadingConversations(true);
     try {
-      const params = {
-        limit: 10000,
-        search: currentSearchTerm || undefined,
-      };
-      const conversationsData = await getConversations(params);
+      const conversationsData = await getConversations({ limit: 10000 });
       setAllConversations(conversationsData);
-      setVisibleConversations(conversationsData.slice(0, CONVERSATION_PAGE_SIZE));
-      setConversationPage(2);
-      setHasMoreConversations(conversationsData.length > CONVERSATION_PAGE_SIZE);
     } catch (error) {
       console.error('Error fetching conversations:', error);
     } finally {
@@ -253,8 +320,8 @@ const WhatsAppChatPage = () => {
   }, []);
 
   useEffect(() => {
-    fetchAllConversations(debouncedSearchTerm);
-  }, [debouncedSearchTerm, fetchAllConversations]);
+    fetchAllConversations();
+  }, [fetchAllConversations]);
 
   const handleLoadMoreConversations = useCallback(() => {
     if (!hasMoreConversations || isLoadingConversations) return;
@@ -262,16 +329,16 @@ const WhatsAppChatPage = () => {
     const nextPage = conversationPage;
     const startIndex = (nextPage - 1) * CONVERSATION_PAGE_SIZE;
     const endIndex = nextPage * CONVERSATION_PAGE_SIZE;
-    
-    const newVisible = allConversations.slice(startIndex, endIndex);
+
+    const newVisible = filteredConversations.slice(startIndex, endIndex);
 
     if (newVisible.length > 0) {
       setVisibleConversations(prev => [...prev, ...newVisible]);
       setConversationPage(nextPage + 1);
     }
-    
-    setHasMoreConversations(endIndex < allConversations.length);
-  }, [conversationPage, hasMoreConversations, isLoadingConversations, allConversations]);
+
+    setHasMoreConversations(endIndex < filteredConversations.length);
+  }, [conversationPage, hasMoreConversations, isLoadingConversations, filteredConversations]);
 
   const handleSelectConversation = useCallback(async (convo) => {
     if (convo.read_status === 'sent') {
@@ -282,7 +349,6 @@ const WhatsAppChatPage = () => {
             c.id === convo.id ? { ...c, read_status: 'read' } : c
           );
         setAllConversations(updateConversations);
-        setVisibleConversations(updateConversations);
       } catch (error) {
         console.error("Error marking conversation as read", error);
       }
@@ -411,7 +477,6 @@ const WhatsAppChatPage = () => {
       };
 
       setAllConversations(updateConvoList);
-      setVisibleConversations(updateConvoList);
 
       setMessagesCache(prevCache => {
         const currentMessages = prevCache[newMessage.conversation_id] || [];
@@ -690,8 +755,11 @@ const WhatsAppChatPage = () => {
         selectedConversation={selectedConversation}
         onSelectConversation={handleSelectConversation}
         userRole={userRole}
-        onConversationInitiated={() => fetchAllConversations(debouncedSearchTerm)}
+        onConversationInitiated={() => fetchAllConversations()}
         onSearch={setSearchTerm}
+        searchTerm={searchTerm}
+        activeFilter={activeFilter}
+        onFilterChange={setActiveFilter}
         onLoadMore={handleLoadMoreConversations}
         hasMore={hasMoreConversations}
       />

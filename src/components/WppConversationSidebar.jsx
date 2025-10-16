@@ -12,22 +12,19 @@ const WppConversationSidebar = ({
   userRole,
   onConversationInitiated,
   onSearch,
+  searchTerm,
+  activeFilter,
+  onFilterChange,
   onLoadMore,
   hasMore,
 }) => {
-  const [activeFilter, setActiveFilter] = useState('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
 
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const [taggingConversationId, setTaggingConversationId] = useState(null);
 
   const [contextMenu, setContextMenu] = useState(null);
   const scrollContainerRef = useRef(null);
-
-  useEffect(() => {
-    onSearch(searchTerm);
-  }, [searchTerm, onSearch]);
 
   useEffect(() => {
     const handleClickOutside = () => setContextMenu(null);
@@ -99,13 +96,13 @@ const WppConversationSidebar = ({
           placeholder="Buscar por nombre, teléfono o cédula..."
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => onSearch(e.target.value)}
         />
       </div>
       <div className="flex justify-around p-3 bg-gray-100 border-b border-gray-200">
-        <button className={getButtonClass('Nuevos')} onClick={() => setActiveFilter('Nuevos')}>Nuevos</button>
-        <button className={getButtonClass('Activos')} onClick={() => setActiveFilter('Activos')}>Activos</button>
-        <button className={getButtonClass('Todos')} onClick={() => setActiveFilter('Todos')}>Todos</button>
+        <button className={getButtonClass('Nuevos')} onClick={() => onFilterChange('Nuevos')}>Nuevos</button>
+        <button className={getButtonClass('Activos')} onClick={() => onFilterChange('Activos')}>Activos</button>
+        <button className={getButtonClass('Todos')} onClick={() => onFilterChange('Todos')}>Todos</button>
       </div>
       <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto">
         <WppConversationList
