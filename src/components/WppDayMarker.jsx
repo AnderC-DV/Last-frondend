@@ -46,9 +46,9 @@ const WppDayMarker = ({ timestamp }) => {
   };
 
   return (
-    <div className="flex justify-center my-3 pointer-events-none select-none">
-      <div className="bg-gray-900 bg-opacity-40 px-3 py-1.5 rounded-full backdrop-blur-sm">
-        <span className="text-xs font-medium text-gray-100">
+    <div className="flex justify-center py-2 pointer-events-none select-none">
+      <div className="bg-gray-100 border border-gray-300 px-3 py-1.5 rounded-full shadow-sm">
+        <span className="text-xs font-semibold text-gray-600">
           {formatDateMarker(timestamp)}
         </span>
       </div>

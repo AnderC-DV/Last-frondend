@@ -133,59 +133,72 @@ const WppMessageList = ({
       )}
 
       {/* Mensajes solo si hay conversación seleccionada */}
-      {selectedConversation && messages.map((msg, index) => {
-        const isIncoming = msg.direction ? msg.direction === 'inbound' : msg.from_phone_number === selectedConversation.customer_phone_number;
-        
-        // Obtener la fecha del mensaje actual y el anterior (si existe)
-        const currentDay = getMessageDay(msg.timestamp);
-        const previousDay = index > 0 ? getMessageDay(messages[index - 1].timestamp) : null;
-        
-        // Mostrar Day Marker si cambió el día
-        const showDayMarker = currentDay && currentDay !== previousDay;
+      {selectedConversation && (() => {
+        // Agrupar mensajes por día
+        const messagesByDay = messages.reduce((groups, msg, index) => {
+          const day = getMessageDay(msg.timestamp);
+          if (!groups[day]) {
+            groups[day] = [];
+          }
+          groups[day].push({ msg, index });
+          return groups;
+        }, {});
 
-        return (
-          <div key={`message-group-${msg.id || msg.message_id || index}`}>
-            {showDayMarker && <WppDayMarker timestamp={msg.timestamp} />}
-            <div
-              className={`flex mb-2 ${isIncoming ? 'justify-start' : 'justify-end'}`}
-            >
-              <div
-                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl shadow-sm ${
-                  isIncoming
-                    ? 'bg-white text-gray-800 rounded-tl-sm'
-                    : 'bg-green-500 text-white rounded-tr-sm'
-                }`}
-              >
-                <WppMessageContent
-                  msg={msg}
-                  conversationId={selectedConversation?.id}
-                  onDocumentClick={onDocumentClick}
-                />
-                <div className={`flex items-center justify-end text-xs mt-1 ${isIncoming ? 'text-gray-500' : 'text-green-100'}`}>
-                  <span>
-                    {(() => {
-                      if (!msg.timestamp) return '';
-                      let date;
-                      if (isNaN(new Date(msg.timestamp).getTime())) {
-                        date = new Date(Number(msg.timestamp) * 1000);
-                      } else {
-                        date = new Date(msg.timestamp);
-                      }
-                      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    })()}
-                  </span>
-                  {!isIncoming && msg.status && (
-                    <WppMessageStatus
-                      status={msg.status.toLowerCase()}
-                      errorMessage={msg.error_message}
-                    />
-                  )}
-                </div>
-              </div>
+        // Renderizar cada grupo de día como un contenedor sticky
+        return Object.entries(messagesByDay).map(([day, dayMessages]) => (
+          <div key={`day-group-${day}`} className="mb-4">
+            {/* Sticky Day Marker */}
+            <div className="sticky top-0 z-10 flex justify-center py-2 pointer-events-none select-none">
+              <WppDayMarker timestamp={dayMessages[0].msg.timestamp} />
             </div>
+
+            {/* Mensajes del día */}
+            {dayMessages.map(({ msg }) => {
+              const isIncoming = msg.direction ? msg.direction === 'inbound' : msg.from_phone_number === selectedConversation.customer_phone_number;
+              return (
+                <div
+                  key={`message-${msg.id || msg.message_id || crypto.randomUUID()}`}
+                  className={`flex mb-2 ${isIncoming ? 'justify-start' : 'justify-end'}`}
+                >
+                  <div
+                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl shadow-sm ${
+                      isIncoming
+                        ? 'bg-white text-gray-800 rounded-tl-sm'
+                        : 'bg-green-500 text-white rounded-tr-sm'
+                    }`}
+                  >
+                    <WppMessageContent
+                      msg={msg}
+                      conversationId={selectedConversation?.id}
+                      onDocumentClick={onDocumentClick}
+                    />
+                    <div className={`flex items-center justify-end text-xs mt-1 ${isIncoming ? 'text-gray-500' : 'text-green-100'}`}>
+                      <span>
+                        {(() => {
+                          if (!msg.timestamp) return '';
+                          let date;
+                          if (isNaN(new Date(msg.timestamp).getTime())) {
+                            date = new Date(Number(msg.timestamp) * 1000);
+                          } else {
+                            date = new Date(msg.timestamp);
+                          }
+                          return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        })()}
+                      </span>
+                      {!isIncoming && msg.status && (
+                        <WppMessageStatus
+                          status={msg.status.toLowerCase()}
+                          errorMessage={msg.error_message}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
+        ));
+      })()}
       <div ref={messagesEndRef} />
 
       {/* Botón flotante para ir al último mensaje - dentro del área de conversación */}
