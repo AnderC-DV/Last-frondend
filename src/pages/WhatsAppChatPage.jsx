@@ -515,7 +515,8 @@ const WhatsAppChatPage = () => {
       setMessages(prevMessages => [...prevMessages, optimisticMessage]);
       const messageToSend = newMessage;
       setNewMessage('');
-      setTimeout(scrollToBottom, 100);
+      // No hacer scroll aquí - el useLayoutEffect en WppMessageList lo hará automáticamente
+      // si el usuario estaba viendo el final de la conversación
 
       // Optimistic update for conversation list (ya no es necesario con WebSocket)
 

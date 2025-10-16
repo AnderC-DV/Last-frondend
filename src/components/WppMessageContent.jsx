@@ -94,7 +94,8 @@ const useIntersectionObserver = (ref, messageType, setLoadPriority) => {
 const WppMessageContent = ({
   msg,
   conversationId,
-  onDocumentClick
+  onDocumentClick,
+  onMediaLoad // Callback cuando media carga
 }) => {
   const [mediaUrl, setMediaUrl] = useState(msg.localMediaUrl || '');
   const [isLoading, setIsLoading] = useState(false);
@@ -214,14 +215,26 @@ const WppMessageContent = ({
       case 'image':
         return mediaUrl ? (
           <MediaWrapper>
-            <img src={mediaUrl} alt="Imagen" className="max-w-xs rounded-lg" onError={() => !isPending && setHasError(true)} />
+            <img 
+              src={mediaUrl} 
+              alt="Imagen" 
+              className="max-w-xs rounded-lg" 
+              onError={() => !isPending && setHasError(true)}
+              onLoad={() => onMediaLoad && onMediaLoad(msg.message_id || msg.media?.id)}
+            />
             {messageBody && <p className="text-sm leading-relaxed mt-1 whitespace-pre-wrap break-words">{messageBody}</p>}
           </MediaWrapper>
         ) : <p className="text-gray-500 italic">Imagen no disponible</p>;
       case 'video':
         return mediaUrl ? (
           <MediaWrapper>
-            <video src={mediaUrl} controls className="max-w-xs rounded-lg" onError={() => !isPending && setHasError(true)} />
+            <video 
+              src={mediaUrl} 
+              controls 
+              className="max-w-xs rounded-lg" 
+              onError={() => !isPending && setHasError(true)}
+              onLoadedMetadata={() => onMediaLoad && onMediaLoad(msg.message_id || msg.media?.id)}
+            />
             {messageBody && <p className="text-sm leading-relaxed mt-1 whitespace-pre-wrap break-words">{messageBody}</p>}
           </MediaWrapper>
         ) : <p className="text-gray-500 italic">Video no disponible</p>;

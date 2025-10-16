@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import WppMessageContent from './WppMessageContent';
 import WppMessageStatus from './WppMessageStatus';
 import WppScrollToBottomButton from './WppScrollToBottomButton';
@@ -42,27 +42,65 @@ const WppMessageList = ({
   const prevScrollHeightRef = useRef(null); // Ref para guardar el scrollHeight anterior
   const isInitialLoadRef = useRef(true); // Ref para evitar carga automática en primer render
   const observerTimeoutRef = useRef(null); // Timeout para delayed observer
+  const loadedMediaRef = useRef(new Set()); // Track media que ha cargado
+  const mediaLoadTimeoutRef = useRef(null); // Timeout para reajustar scroll después de media
+  const wasAtBottomRef = useRef(true); // Track si el usuario estaba al final
 
   // Hook para hacer scroll al final cuando se selecciona una nueva conversación
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      wasAtBottomRef.current = true;
     }
   }, [selectedConversation]); // Se ejecuta solo al cambiar de conversación
 
+  // Escuchar scroll del usuario para saber si está al final o no
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const updateScrollPosition = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const isAtBottom = scrollHeight - (scrollTop + clientHeight) <= 50;
+      wasAtBottomRef.current = isAtBottom;
+    };
+
+    updateScrollPosition();
+    container.addEventListener('scroll', updateScrollPosition);
+
+    return () => {
+      container.removeEventListener('scroll', updateScrollPosition);
+    };
+  }, []);
+
   // Hook para preservar la posición del scroll al cargar mensajes antiguos
+  // Y hacer scroll suave al final cuando llegan nuevos mensajes (si estaba al final)
   useLayoutEffect(() => {
-    if (prevScrollHeightRef.current !== null && messagesContainerRef.current) {
-      const scrollHeight = messagesContainerRef.current.scrollHeight;
-      // La nueva posición de scroll es la diferencia de altura, manteniendo la vista actual
+    if (!messagesContainerRef.current) return;
+
+    const container = messagesContainerRef.current;
+    const scrollHeight = container.scrollHeight;
+    const wasAtBottom = wasAtBottomRef.current;
+
+    // Si estamos cargando mensajes antiguos (scroll preservación)
+    if (prevScrollHeightRef.current !== null && isLoadingOlderMessages) {
       const newScrollTop = scrollHeight - prevScrollHeightRef.current;
-      messagesContainerRef.current.scrollTop = newScrollTop;
+      container.scrollTop = newScrollTop;
+    } 
+    // Si hay nuevos mensajes y estábamos al final, hacer scroll suave al final
+    else if (wasAtBottom && !isLoadingOlderMessages) {
+      requestAnimationFrame(() => {
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      });
     }
-    // Actualizamos la referencia para el próximo renderizado
-    if (messagesContainerRef.current) {
-      prevScrollHeightRef.current = messagesContainerRef.current.scrollHeight;
+
+    // Actualizar referencia
+    prevScrollHeightRef.current = scrollHeight;
+    // Si estaba al fondo y auto-scroll ejecutó, mantenerlo true
+    if (!isLoadingOlderMessages) {
+      wasAtBottomRef.current = container.scrollHeight - (container.scrollTop + container.clientHeight) <= 50;
     }
-  }, [messages]); // Se ejecuta cada vez que los mensajes cambian
+  }, [messages, isLoadingOlderMessages]);
 
   // Hook para el Intersection Observer - CON DELAY para evitar race condition
   useEffect(() => {
@@ -106,6 +144,32 @@ const WppMessageList = ({
       }
     };
   }, [hasMoreMessages, isLoadingOlderMessages, onLoadOlderMessages]);
+
+  // Callback para cuando una media carga - reajusta scroll si es el último mensaje
+  const handleMediaLoad = useCallback((mediaId) => {
+    loadedMediaRef.current.add(mediaId);
+    
+    // Debounce: esperar 100ms a que carguen todas las medias
+    if (mediaLoadTimeoutRef.current) {
+      clearTimeout(mediaLoadTimeoutRef.current);
+    }
+
+    mediaLoadTimeoutRef.current = setTimeout(() => {
+      if (messagesContainerRef.current && wasAtBottomRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      }
+    }, 100);
+  }, []);
+
+  // Limpiar refs cuando cambia de conversación
+  useEffect(() => {
+    return () => {
+      loadedMediaRef.current.clear();
+      if (mediaLoadTimeoutRef.current) {
+        clearTimeout(mediaLoadTimeoutRef.current);
+      }
+    };
+  }, [selectedConversation]);
 
   // Memoizar la agrupación de mensajes por día (FUERA del render para cumplir regla de hooks)
   const messagesByDay = useMemo(() => {
@@ -188,6 +252,7 @@ const WppMessageList = ({
                       msg={msg}
                       conversationId={selectedConversation?.id}
                       onDocumentClick={onDocumentClick}
+                      onMediaLoad={handleMediaLoad}
                     />
                     <div className={`flex items-center justify-end text-xs mt-1 ${isIncoming ? 'text-gray-500' : 'text-green-100'}`}>
                       <span>
