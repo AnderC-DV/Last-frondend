@@ -196,29 +196,6 @@ const WhatsAppChatPage = () => {
     }
   }, [selectedConversation, isLoadingOlderMessages, hasMoreMessages, offset]);
 
-  const fetchConversations = useCallback(async (searchTerm = '') => {
-    try {
-      const params = {
-        limit: 10000, // Carga masiva única
-        search: searchTerm || undefined,
-      };
-      const allConversations = await getConversations(params);
-      
-      const sortedData = allConversations.sort((a, b) => {
-        const timeA = a.updated_at ? new Date(a.updated_at) : new Date(0);
-        const timeB = b.updated_at ? new Date(b.updated_at) : new Date(0);
-        return timeB - timeA;
-      });
-
-      setConversations(sortedData);
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
 
   // Efecto para cargar los mensajes iniciales de una conversación
   useEffect(() => {
@@ -626,16 +603,15 @@ const WhatsAppChatPage = () => {
   return (
     <div className="flex h-full min-h-0 bg-transparent overflow-hidden" style={{background: 'transparent'}}>
       <WppConversationSidebar
-        conversations={conversations}
-        isLoading={isLoadingMessages}
         selectedConversation={selectedConversation}
         onSelectConversation={(convo) => {
           initNotificationSound(); // Aseguramos la inicialización también al seleccionar una conversación
           setSelectedConversation(convo);
         }}
         userRole={userRole}
-        onConversationInitiated={fetchConversations}
-        onSearch={fetchConversations}
+        onConversationInitiated={() => {
+          // La recarga ahora es manejada internamente por el Sidebar
+        }}
       />
 
       <WppChatArea
@@ -678,7 +654,11 @@ const WhatsAppChatPage = () => {
       <ExpiredSessionModal
         isOpen={isExpiredSessionModalOpen}
         onClose={() => setIsExpiredSessionModalOpen(false)}
-        onConversationInitiated={fetchConversations}
+        onConversationInitiated={() => {
+          // Esta función ahora es manejada por el Sidebar,
+          // se puede dejar vacía o conectar a una nueva lógica de recarga si es necesario.
+          console.log("onConversationInitiated from Modal called");
+        }}
         conversation={selectedConversation}
         clientInfo={clientInfo}
         onTemplateSelect={setSelectedTemplate}

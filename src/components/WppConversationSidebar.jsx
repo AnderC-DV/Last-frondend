@@ -1,19 +1,24 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WppConversationList from './WppConversationList';
 import InitiateConversationModal from './InitiateConversationModal';
 import WppTagInputModal from './WppTagInputModal';
-import { addTagToConversation } from '../services/api';
+import { getConversations, addTagToConversation } from '../services/api';
 import useDebounce from '../hooks/useDebounce';
 
+const CONVERSATION_PAGE_SIZE = 50;
+
 const WppConversationSidebar = ({
-  conversations,
-  isLoading,
   selectedConversation,
   onSelectConversation,
   userRole,
   onConversationInitiated,
-  onSearch
 }) => {
+  const [allConversations, setAllConversations] = useState([]);
+  const [visibleConversations, setVisibleConversations] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+
   const [activeFilter, setActiveFilter] = useState('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,9 +29,50 @@ const WppConversationSidebar = ({
 
   const scrollContainerRef = useRef(null);
 
+  // 1. Carga única de todas las conversaciones
+  const fetchAllConversations = useCallback(async (searchTerm) => {
+    setIsLoading(true);
+    try {
+      const params = {
+        limit: 10000, // Límite muy alto para traer todo
+        search: searchTerm || undefined,
+      };
+      const conversationsData = await getConversations(params);
+      setAllConversations(conversationsData);
+      // Mostrar el primer lote inmediatamente
+      setVisibleConversations(conversationsData.slice(0, CONVERSATION_PAGE_SIZE));
+      setPage(2); // Preparar para la siguiente página
+      setHasMore(conversationsData.length > CONVERSATION_PAGE_SIZE);
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Efecto para la carga inicial y la búsqueda
   useEffect(() => {
-    onSearch(debouncedSearchTerm);
-  }, [debouncedSearchTerm, onSearch]);
+    fetchAllConversations(debouncedSearchTerm);
+  }, [debouncedSearchTerm, fetchAllConversations]);
+
+  // 2. Carga progresiva desde el estado local
+  const handleLoadMore = useCallback(() => {
+    if (!hasMore || isLoading) return;
+
+    const nextPage = page;
+    const startIndex = (nextPage - 1) * CONVERSATION_PAGE_SIZE;
+    const endIndex = nextPage * CONVERSATION_PAGE_SIZE;
+    
+    const newVisibleConversations = allConversations.slice(startIndex, endIndex);
+
+    if (newVisibleConversations.length > 0) {
+      setVisibleConversations(prev => [...prev, ...newVisibleConversations]);
+      setPage(nextPage + 1);
+    }
+    
+    setHasMore(endIndex < allConversations.length);
+
+  }, [page, hasMore, isLoading, allConversations]);
 
   const handleAddTag = (conversationId) => {
     setTaggingConversationId(conversationId);
@@ -37,7 +83,11 @@ const WppConversationSidebar = ({
     if (!taggingConversationId || !tagName) return;
     try {
       await addTagToConversation(taggingConversationId, tagName);
-      window.location.reload();
+      // Instead of reload, we should refetch or update state ideally
+      setConversations([]);
+      setPage(1);
+      setHasMore(true);
+      fetchConversations(true);
     } catch (error) {
       alert('Error al agregar etiqueta: ' + error.message);
     } finally {
@@ -45,10 +95,6 @@ const WppConversationSidebar = ({
       setTaggingConversationId(null);
     }
   };
-
-  const filteredConversations = useMemo(() => {
-    return conversations;
-  }, [conversations]);
 
   const getButtonClass = (filterName) => (
     activeFilter === filterName
@@ -82,20 +128,17 @@ const WppConversationSidebar = ({
         <button className={getButtonClass('Todos')} onClick={() => setActiveFilter('Todos')}>Todos</button>
       </div>
       <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto">
-        {isLoading ? (
-          <div className="flex justify-center items-center h-full">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
-          </div>
-        ) : (
-          <WppConversationList
-            conversations={filteredConversations}
-            selectedConversation={selectedConversation}
-            onSelectConversation={onSelectConversation}
-            userRole={userRole}
-            onAddTag={handleAddTag}
-            scrollContainerRef={scrollContainerRef}
-          />
-        )}
+        <WppConversationList
+          conversations={visibleConversations}
+          selectedConversation={selectedConversation}
+          onSelectConversation={onSelectConversation}
+          userRole={userRole}
+          onAddTag={handleAddTag}
+          scrollContainerRef={scrollContainerRef}
+          onLoadMore={handleLoadMore}
+          hasMore={hasMore}
+          isLoading={isLoading}
+        />
       </div>
       <WppTagInputModal
         isOpen={isTagModalOpen}

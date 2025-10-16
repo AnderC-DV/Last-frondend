@@ -3,7 +3,9 @@ import { format, isToday, isYesterday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import WppWindowCounter from './WppWindowCounter';
 
-const ConversationListItem = ({ conversation, lastMessage, isSelected, onSelect, userRole, onAddTag }) => {
+const ConversationListItem = ({ conversation, isSelected, onSelect, userRole, onAddTag }) => {
+  const lastMessage = conversation.messages && conversation.messages.length > 0 ? conversation.messages[0] : null;
+
   const formatDate = (timestamp) => {
     if (!timestamp) return null;
     const date = new Date(timestamp);
@@ -32,11 +34,11 @@ const ConversationListItem = ({ conversation, lastMessage, isSelected, onSelect,
         case 'sticker':
           return '✨ Sticker';
         default:
-          return truncate(conversation.last_message_preview) || '[Mensaje no soportado]';
+          return '[Mensaje no soportado]';
       }
     }
     
-    return conversation.last_message_preview || '...';
+    return '...';
   };
 
   const displayTimestamp = lastMessage?.timestamp || conversation.updated_at;

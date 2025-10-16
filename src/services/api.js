@@ -289,39 +289,6 @@ export const getLastMessageForConversation = async (conversationId) => {
   const response = await getConversationMessages(conversationId, { limit: 1 });
   return response.messages && response.messages.length > 0 ? response.messages[0] : null;
 };
-export const getLastMessagesForConversations = async (conversationIds) => {
-  try {
-    const messagePromises = conversationIds.map(id =>
-      getConversation(id, { limit: 1 })
-        .then(response => ({
-          conversationId: id,
-          message: response.messages && response.messages.length > 0 ? response.messages[0] : null
-        }))
-        .catch(error => ({
-          conversationId: id,
-          message: null,
-          error: error
-        }))
-    );
-
-    const results = await Promise.all(messagePromises);
-    
-    const messagesByConversation = results.reduce((acc, result) => {
-      if (result.message) {
-        acc[result.conversationId] = result.message;
-      }
-      if (result.error) {
-        console.error(`Failed to fetch message for conversation ${result.conversationId}:`, result.error);
-      }
-      return acc;
-    }, {});
-
-    return messagesByConversation;
-  } catch (error) {
-    console.error("Error fetching messages in batch:", error);
-    return {};
-  }
-};
 // --- Endpoints de Respuesta Multimedia desde GCS ---
 export const sendAudioFromGCS = (conversationId, gcsUrl) => apiRequest(`/conversations/${conversationId}/reply/audio-from-gcs`, 'POST', { storage_object: gcsUrl });
 export const sendDocumentFromGCS = (conversationId, gcsUrl, filename) => apiRequest(`/conversations/${conversationId}/reply/document-from-gcs`, 'POST', { storage_object: gcsUrl, filename });
