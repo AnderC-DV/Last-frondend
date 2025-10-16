@@ -243,6 +243,24 @@ const WhatsAppChatPage = () => {
       return value.toString().toLowerCase();
     };
 
+    const isWithin24Hours = (timestamp) => {
+      if (!timestamp) return false;
+
+      let parsed;
+      const date = new Date(timestamp);
+      if (!Number.isNaN(date.getTime())) {
+        parsed = date.getTime();
+      } else if (!Number.isNaN(Number(timestamp))) {
+        parsed = Number(timestamp) * 1000; // Unix seconds
+      } else {
+        return false;
+      }
+
+      const now = Date.now();
+      const windowMs = 24 * 60 * 60 * 1000;
+      return now - parsed <= windowMs;
+    };
+
     const resolveMessageBody = (message) => (
       message?.body ??
       message?.text ??
@@ -261,12 +279,14 @@ const WhatsAppChatPage = () => {
     };
 
     return allConversations.filter((conversation) => {
+      const status = (conversation.read_status || '').toLowerCase();
+
       const matchesFilter = (() => {
         switch (activeFilter) {
           case 'Nuevos':
-            return conversation.read_status === 'sent';
+            return status !== 'read';
           case 'Activos':
-            return conversation.read_status === 'read';
+            return isWithin24Hours(conversation.last_client_message_at);
           default:
             return true;
         }
