@@ -8,6 +8,7 @@ import TemplateManagerPage from '../pages/TemplateManagerPage';
 import TemplateEditorPage from '../pages/TemplateEditorPage';
 import TemplateApprovalPage from '../pages/TemplateApprovalPage';
 import WhatsAppChatPage from '../pages/WhatsAppChatPage';
+import AdministracionPersonal from '../pages/AdministracionPersonal'; // Importar el nuevo componente
 import ProtectedRoute from './ProtectedRoute';
 export const AppRouter = () => {
   return (
@@ -26,6 +27,7 @@ export const AppRouter = () => {
         <Route path="templates/:id/edit" element={<TemplateEditorPage />} />
         <Route path="templates/approval" element={<TemplateApprovalPage />} />
         <Route path="chat" element={<WhatsAppChatPage />} />
+        <Route path="administracion-personal" element={<AdministracionPersonal />} />
         {/* Aquí se pueden añadir más rutas protegidas */}
       </Route>
     </Routes>
