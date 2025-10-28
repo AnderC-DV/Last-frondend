@@ -7,9 +7,9 @@ import FormField from '../components/FormField';
 import PersonalDetailView from '../components/PersonalDetailView';
 import { UserPlus, UserMinus, Briefcase, Search, Filter, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Download, FileText, Loader2, CheckCircle, XCircle, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import useDebounce from '../hooks/useDebounce';
 import { exportToCSV, exportToXLSX } from '../utils/exportToCSV';
 import usePersonalAPI from '../hooks/usePersonalAPI';
+import * as api from '../services/api';
 
 // --- Iconos para las tarjetas de opciones (usando lucide-react) ---
 const UserPlusIcon = () => <UserPlus className="h-10 w-10 text-blue-600 mb-4" />;
@@ -40,9 +40,11 @@ const AdministracionPersonal = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCargo, setFilterCargo] = useState('todos');
   const [filterArea, setFilterArea] = useState('todos');
-  const [filterEstado, setFilterEstado] = useState('ACTIVO'); // Por defecto en Activo
+  const [filterEstado, setFilterEstado] = useState('todos'); // Por defecto mostrar todos los estados
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [allEmployees, setAllEmployees] = useState([]); // Almacena TODOS los empleados
+  const [loadingAllEmployees, setLoadingAllEmployees] = useState(false);
   
   const [selectedPersonal, setSelectedPersonal] = useState(null);
   const [viewDetailModal, setViewDetailModal] = useState(false);
@@ -53,28 +55,74 @@ const AdministracionPersonal = () => {
   const [isFormSubmitting, setIsFormSubmitting] = useState(false);
 
 
-  const debouncedSearchTerm = useDebounce(searchTerm, 500);
-  // Cargar empleados y aprobaciones pendientes
-  const refreshData = useCallback(() => {
-    // Si el término de búsqueda parece una cédula, ignoramos otros filtros
-    const isCedulaSearch = debouncedSearchTerm && /^\d{5,}$/.test(debouncedSearchTerm);
-
-    const params = {
-      page: currentPage,
-      size: itemsPerPage,
-      search: debouncedSearchTerm || undefined,
-      // Solo aplicar filtros si no es una búsqueda por cédula
-      cargo: !isCedulaSearch && filterCargo !== 'todos' ? filterCargo : undefined,
-      area: !isCedulaSearch && filterArea !== 'todos' ? filterArea : undefined,
-      estado: !isCedulaSearch && filterEstado !== 'todos' ? filterEstado : undefined,
-    };
-    fetchEmployees(params);
-    fetchPendingApprovals();
-  }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCargo, filterArea, filterEstado, fetchEmployees, fetchPendingApprovals]);
-
+  // Resetear página cuando cambian los filtros
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    setCurrentPage(1);
+  }, [filterCargo, filterArea, filterEstado]);
+
+  // Obtener TODOS los empleados una sola vez
+  useEffect(() => {
+    const loadAllEmployees = async () => {
+      setLoadingAllEmployees(true);
+      try {
+        let allEmps = [];
+        let page = 1;
+        let hasMore = true;
+
+        // Hacer llamadas paginadas hasta obtener todos
+        while (hasMore) {
+          const params = {
+            page: page,
+            size: 100, // Máximo permitido por el backend
+          };
+
+          // Aplicar filtros del backend
+          if (filterCargo !== 'todos') params.cargo = filterCargo;
+          if (filterArea !== 'todos') params.area = filterArea;
+          if (filterEstado !== 'todos') params.estado = filterEstado;
+
+          try {
+            // Usar la función de api.js
+            const data = await api.getEmployees(params);
+            const items = data.items || data || [];
+            
+            if (Array.isArray(items) && items.length > 0) {
+              allEmps = [...allEmps, ...items];
+            }
+
+            // Verificar si hay más páginas
+            if (data.page && data.totalPages && data.page >= data.totalPages) {
+              hasMore = false;
+            } else if (!Array.isArray(items) || items.length < 100) {
+              hasMore = false;
+            }
+
+            page++;
+          } catch (pageError) {
+            console.error(`Error en página ${page}:`, pageError);
+            hasMore = false;
+            if (allEmps.length === 0) {
+              throw pageError;
+            }
+          }
+        }
+
+        setAllEmployees(allEmps);
+      } catch (error) {
+        console.error('Error loading all employees:', error);
+        toast.error('Error al cargar empleados');
+      } finally {
+        setLoadingAllEmployees(false);
+      }
+    };
+
+    loadAllEmployees();
+  }, [filterCargo, filterArea, filterEstado]);
+
+  // Cargar aprobaciones pendientes al montar el componente
+  useEffect(() => {
+    fetchPendingApprovals();
+  }, [fetchPendingApprovals]);
 
 
   // === OPCIONES PARA FILTROS (Simulado, idealmente vendrían de la API) ===
@@ -87,6 +135,92 @@ const AdministracionPersonal = () => {
     { label: 'Pendiente Retiro', value: 'PENDIENTE_RETIRO_JURIDICO' },
     { label: 'Rechazo Retiro', value: 'RECHAZO_RETIRO_JURIDICO' },
   ];
+
+  // === FILTRADO CLIENT-SIDE ===
+  // Filtrar empleados localmente por nombre, cedula, correo o adminfo
+  const filteredEmployees = useMemo(() => {
+    if (!searchTerm || !allEmployees.length) return allEmployees;
+
+    const term = searchTerm.toLowerCase().trim();
+    return allEmployees.filter(emp => {
+      // Buscar en: nombre, cedula, correo_renovar, correo_personal, adminfo
+      const nombre = (emp.nombre || '').toLowerCase();
+      const cedula = (emp.cedula || '').toLowerCase();
+      const correoRenovar = (emp.correo_renovar || '').toLowerCase();
+      const correoPersonal = (emp.correo_personal || '').toLowerCase();
+      const adminfo = (emp.adminfo || '').toLowerCase();
+
+      return (
+        nombre.includes(term) ||
+        cedula.includes(term) ||
+        correoRenovar.includes(term) ||
+        correoPersonal.includes(term) ||
+        adminfo.includes(term)
+      );
+    });
+  }, [searchTerm, allEmployees]);
+
+  // Paginación manual sobre los resultados filtrados
+  const totalFilteredEmployees = filteredEmployees.length;
+  const totalPages = Math.ceil(totalFilteredEmployees / itemsPerPage);
+  const paginatedEmployees = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredEmployees.slice(startIndex, endIndex);
+  }, [filteredEmployees, currentPage, itemsPerPage]);
+
+  // Función para recargar todos los empleados
+  const reloadAllEmployees = useCallback(async () => {
+    setLoadingAllEmployees(true);
+    try {
+      let allEmps = [];
+      let page = 1;
+      let hasMore = true;
+
+      // Hacer llamadas paginadas hasta obtener todos
+      while (hasMore) {
+        const params = {
+          page: page,
+          size: 100,
+        };
+
+        if (filterCargo !== 'todos') params.cargo = filterCargo;
+        if (filterArea !== 'todos') params.area = filterArea;
+        if (filterEstado !== 'todos') params.estado = filterEstado;
+
+        try {
+          const data = await api.getEmployees(params);
+          const items = data.items || data || [];
+          
+          if (Array.isArray(items) && items.length > 0) {
+            allEmps = [...allEmps, ...items];
+          }
+
+          if (data.page && data.totalPages && data.page >= data.totalPages) {
+            hasMore = false;
+          } else if (!Array.isArray(items) || items.length < 100) {
+            hasMore = false;
+          }
+
+          page++;
+        } catch (pageError) {
+          console.error(`Error en página ${page}:`, pageError);
+          hasMore = false;
+          if (allEmps.length === 0) {
+            throw pageError;
+          }
+        }
+      }
+
+      setAllEmployees(allEmps);
+      setCurrentPage(1);
+    } catch (error) {
+      console.error('Error reloading employees:', error);
+      toast.error('Error al recargar empleados');
+    } finally {
+      setLoadingAllEmployees(false);
+    }
+  }, [filterCargo, filterArea, filterEstado]);
 
   // === HANDLERS ===
   const handleFormSubmit = useCallback(async (formKey, data) => {
@@ -101,13 +235,13 @@ const AdministracionPersonal = () => {
       
       setOpenModal(null);
       // Refrescar la lista
-      refreshData();
+      reloadAllEmployees();
     } catch (error) {
       // El hook ya muestra el toast de error
     } finally {
       setIsFormSubmitting(false);
     }
-  }, [createEmployee, requestRetirement, refreshData]);
+  }, [createEmployee, requestRetirement, reloadAllEmployees]);
 
   const handleViewDetail = async (personal) => {
     setSelectedPersonal(personal); // Muestra datos básicos inmediatamente
@@ -181,7 +315,7 @@ const AdministracionPersonal = () => {
   // Resetear paginación cuando cambian filtros
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchTerm, filterCargo, filterArea, filterEstado]);
+  }, [filterCargo, filterArea, filterEstado]);
 
   const formConfigs = useMemo(() => ({
     ingreso: {
@@ -477,7 +611,7 @@ const AdministracionPersonal = () => {
 
               {/* Info de resultados */}
               <div className="text-sm text-gray-600">
-                Mostrando <span className="font-semibold text-gray-800">{employees.length}</span> de <span className="font-semibold text-gray-800">{pagination.total}</span> registros
+                Mostrando <span className="font-semibold text-gray-800">{paginatedEmployees.length}</span> de <span className="font-semibold text-gray-800">{totalFilteredEmployees}</span> registros
               </div>
             </div>
 
@@ -495,7 +629,7 @@ const AdministracionPersonal = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {isLoading ? (
+                  {loadingAllEmployees ? (
                     <tr>
                       <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
                         <div className="flex justify-center items-center gap-2">
@@ -504,8 +638,8 @@ const AdministracionPersonal = () => {
                         </div>
                       </td>
                     </tr>
-                  ) : employees.length > 0 ? (
-                    employees.map((personal) => (
+                  ) : paginatedEmployees.length > 0 ? (
+                    paginatedEmployees.map((personal) => (
                       <tr key={personal.cedula} className="hover:bg-green-50 transition-colors duration-150">
                         <td className="px-6 py-4 text-sm font-medium text-gray-900">{personal.nombre}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">{personal.correo_renovar || 'N/A'}</td>
@@ -548,8 +682,22 @@ const AdministracionPersonal = () => {
                   ) : (
                     <tr>
                       <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
-                        <p className="text-lg font-semibold">No se encontraron empleados</p>
-                        <p className="text-sm mt-1">Intenta ajustar los filtros de búsqueda o crea un nuevo empleado.</p>
+                        {searchTerm ? (
+                          <>
+                            <p className="text-lg font-semibold">No se encontraron resultados para "{searchTerm}"</p>
+                            <p className="text-sm mt-1">Intenta con otro término de búsqueda (nombre, cédula, correo o adminfo).</p>
+                          </>
+                        ) : allEmployees.length === 0 ? (
+                          <>
+                            <p className="text-lg font-semibold">No se encontraron empleados</p>
+                            <p className="text-sm mt-1">Intenta ajustar los filtros o crea un nuevo empleado.</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-lg font-semibold">Sin resultados</p>
+                            <p className="text-sm mt-1">No hay empleados disponibles con los filtros seleccionados.</p>
+                          </>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -558,10 +706,11 @@ const AdministracionPersonal = () => {
             </div>
 
             {/* Paginación */}
-            {pagination.total > 0 && (
+            {totalFilteredEmployees > 0 && (
               <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
-                  Página <span className="font-semibold">{pagination.page}</span> de <span className="font-semibold">{pagination.totalPages}</span>
+                  Página <span className="font-semibold">{currentPage}</span> de <span className="font-semibold">{totalPages}</span>
+                  {searchTerm && <span className="ml-2">({totalFilteredEmployees} resultados encontrados)</span>}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -580,15 +729,15 @@ const AdministracionPersonal = () => {
 
                   <button
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={pagination.page <= 1}
+                    disabled={currentPage <= 1}
                     className="p-2 text-gray-600 hover:bg-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
 
                   <button
-                    onClick={() => setCurrentPage(prev => Math.min(pagination.totalPages, prev + 1))}
-                    disabled={pagination.page >= pagination.totalPages}
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage >= totalPages}
                     className="p-2 text-gray-600 hover:bg-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="h-5 w-5" />
