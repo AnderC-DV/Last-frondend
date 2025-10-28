@@ -180,7 +180,9 @@ const IngresoPersonalForm = ({ onSubmit, isSubmitting = false, onCancel }) => {
         // Validadores específicos para ciertos campos
         if (field === 'contacto_emergencia_telefono') {
           error = validators.telefonoEmergencia(formData[field]);
-        } else if (field === 'fecha_nacimiento' || field === 'fecha_ingreso') {
+        } else if (field === 'fecha_ingreso') {
+          error = validators.date(formData[field]);
+        } else if (field === 'fecha_nacimiento') {
           error = validators.fechaNacimiento(formData[field]);
         }
       }
