@@ -17,6 +17,8 @@ const StepperForm = ({
   onCancel,
   isSubmitting = false,
   submitLabel = 'Enviar',
+  formData,
+  handleChange,
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -112,7 +114,7 @@ const StepperForm = ({
 
       {/* Contenido del paso actual */}
       <div className="mb-8 min-h-[300px]">
-        {step?.component}
+        {step.component && <step.component formData={formData} handleChange={handleChange} />}
       </div>
 
       {/* Botones de navegación */}

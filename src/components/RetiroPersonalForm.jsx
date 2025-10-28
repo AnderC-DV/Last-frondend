@@ -1,99 +1,94 @@
 import React, { useState } from 'react';
 import FormField from './FormField';
 
-/**
- * RetiroPersonalForm - Formulario simple para retiro de personal
- */
-const RetiroPersonalForm = ({ onSubmit, isSubmitting = false }) => {
+const RetiroPersonalForm = ({ onSubmit, isSubmitting = false, empleado = null, onCancel }) => {
   const [formData, setFormData] = useState({
-    cedulaEmpleado: '',
-    razonRetiro: '',
-    fechaRetiro: '',
-    observaciones: '',
+    cedula_a_retirar: empleado?.cedula || '',
+    motivo_retiro: '',
+    fecha_retiro_deseada: '',
+    observacion_retiro: '',
   });
 
-  const updateField = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  // DEBUG: Log cuando cambia formData
+  React.useEffect(() => {
+    console.log('RetiroPersonalForm updated:', formData);
+  }, [formData]);
+
+  const handleChange = (e) => {
+    console.log('onChange disparado:', e.target.name, e.target.value);
+    const { name, value } = e.target;
+    setFormData(prevState => {
+      const newState = { ...prevState, [name]: value };
+      console.log('Nuevo estado:', newState);
+      return newState;
+    });
   };
 
-  const validCedula = (cedula) => {
-    const isValid = cedula.length >= 8;
-    return {
-      isValid,
-      message: isValid ? '' : 'Cédula inválida'
-    };
-  };
-
-  const handleSubmit = async () => {
-    if (onSubmit) {
-      await onSubmit(formData);
-    }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    console.log('Form submitted with data:', formData);
+    if (onSubmit) await onSubmit({...formData, estado: 'RETIRO_SOLICITADO'});
   };
 
   return (
-    <div className="space-y-4">
-      <FormField
-        label="Cédula del Empleado"
-        placeholder="1234567890"
-        value={formData.cedulaEmpleado}
-        onChange={(val) => updateField('cedulaEmpleado', val)}
-        validator={validCedula}
-        required
-      />
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Razón del Retiro</label>
-        <select
-          value={formData.razonRetiro}
-          onChange={(e) => updateField('razonRetiro', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-        >
-          <option value="">Selecciona una razón</option>
-          <option value="renuncia">Renuncia voluntaria</option>
-          <option value="despido">Despido justificado</option>
-          <option value="jubilacion">Jubilación</option>
-          <option value="termino_contrato">Término de contrato</option>
-          <option value="otra">Otra</option>
-        </select>
-      </div>
-
-      <FormField
-        label="Fecha de Retiro"
-        type="date"
-        value={formData.fechaRetiro}
-        onChange={(val) => updateField('fechaRetiro', val)}
-        required
-      />
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Observaciones</label>
-        <textarea
-          value={formData.observaciones}
-          onChange={(e) => updateField('observaciones', e.target.value)}
-          placeholder="Notas adicionales sobre el retiro..."
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
-          rows="4"
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900">Retiro de Personal</h3>
+        <p className="text-sm text-gray-600">Registra la solicitud de retiro del empleado</p>
+        <FormField 
+          label="Cédula del Empleado" 
+          name="cedula_a_retirar" 
+          value={formData.cedula_a_retirar} 
+          onChange={handleChange} 
+          placeholder="1234567890" 
+          required 
+          disabled={!!empleado} 
+        />
+        <FormField 
+          label="Motivo del Retiro" 
+          name="motivo_retiro" 
+          type="select" 
+          value={formData.motivo_retiro} 
+          onChange={handleChange} 
+          options={[
+            {label: 'Selecciona una razón', value: ''}, 
+            {label: 'Renuncia voluntaria', value: 'RENUNCIA_VOLUNTARIA'}, 
+            {label: 'Terminación de contrato', value: 'TERMINACION_CONTRATO'}, 
+            {label: 'Despido', value: 'DESPIDO'}, 
+            {label: 'Jubilación', value: 'JUBILACION'}, 
+            {label: 'Otro', value: 'OTRO'}
+          ]} 
+          required 
+        />
+        <FormField 
+          label="Fecha de Retiro Deseada" 
+          name="fecha_retiro_deseada" 
+          type="date" 
+          value={formData.fecha_retiro_deseada} 
+          onChange={handleChange} 
+          required 
+        />
+        <FormField 
+          label="Observaciones (Opcional)" 
+          name="observacion_retiro" 
+          type="textarea" 
+          value={formData.observacion_retiro} 
+          onChange={handleChange} 
+          placeholder="Notas adicionales sobre el retiro..." 
         />
       </div>
-
-      <div className="pt-4 flex gap-3 justify-end border-t border-gray-200">
-        <button
-          className="px-4 py-2 rounded-lg font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200"
-          onClick={() => {
-            setFormData({
-              cedulaEmpleado: '',
-              razonRetiro: '',
-              fechaRetiro: '',
-              observaciones: '',
-            });
-          }}
+      <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
+        <button 
+          type="button" 
+          onClick={onCancel} 
+          className="px-4 py-2 rounded-lg font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
         >
-          Limpiar
+          Cancelar
         </button>
-        <button
-          onClick={handleSubmit}
-          disabled={isSubmitting}
-          className="px-6 py-2 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
+        <button 
+          type="submit" 
+          disabled={isSubmitting} 
+          className="px-6 py-2 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
         >
           {isSubmitting ? (
             <>
@@ -101,11 +96,11 @@ const RetiroPersonalForm = ({ onSubmit, isSubmitting = false }) => {
               Procesando...
             </>
           ) : (
-            'Registrar Retiro'
+            'Solicitar Retiro'
           )}
         </button>
       </div>
-    </div>
+    </form>
   );
 };
 

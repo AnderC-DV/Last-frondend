@@ -56,7 +56,11 @@ const apiRequest = async (endpoint, method = 'GET', body = null) => {
       if (isNotif) {
         console.error('[API][Notifications][HTTP_ERROR]', { traceId, endpoint, status: response.status, errorMessage, errorData });
       }
-      throw new Error(errorMessage);
+      
+      // Crear error con status code incluido para identificarlo después
+      const error = new Error(errorMessage);
+      error.status = response.status;
+      throw error;
     }
     const json = await response.json();
     if (isNotif) {
@@ -69,7 +73,11 @@ const apiRequest = async (endpoint, method = 'GET', body = null) => {
       const dur = (performance.now() - start).toFixed(1);
       console.error('[API][Notifications][ERROR]', { traceId, endpoint, method, durationMs: dur, message: error.message });
     } else {
-      console.error(`API request failed: ${error.message}`);
+      // No loguear errores 404 - son esperados cuando se busca un recurso que no existe
+      // Solo loguear errores reales de la aplicación
+      if (error.status !== 404) {
+        console.error(`API request failed: ${error.message}`);
+      }
     }
 
     // Provide more specific error messages
@@ -331,3 +339,42 @@ export const calculateCondonation = (obligation_ids) => apiRequest('/condonation
 // --- Endpoints de WhatsApp ---
 export const getClientActiveNumbersByCedula = (cedula) => apiRequest('/whatsapp/initiate', 'POST', { cedula });
 export const sendTemplatedMessage = (data) => apiRequest('/whatsapp/send_from_template', 'POST', data);
+
+// --- Endpoints de Administración de Personal ---
+export const getEmployees = (params) => {
+  // Filtra los parámetros para excluir claves con valor `undefined`
+  const filteredParams = Object.entries(params).reduce((acc, [key, value]) => {
+    if (value !== undefined) {
+      acc[key] = value;
+    }
+    return acc;
+  }, {});
+
+  const queryParams = new URLSearchParams(filteredParams).toString();
+  return apiRequest(`/employees/?${queryParams}`);
+};
+export const createEmployee = (employeeData) => apiRequest('/employees/', 'POST', employeeData);
+
+/**
+ * Obtener empleado por cédula - maneja 404 sin lanzar excepción
+ * Retorna null si no existe (en lugar de lanzar error)
+ */
+export const getEmployeeByCedula = async (cedula) => {
+  try {
+    return await apiRequest(`/employees/${cedula}`);
+  } catch (error) {
+    // Si es 404, retornar null (empleado no existe)
+    if (error.status === 404) {
+      return null;
+    }
+    // Para otros errores, relanzar
+    throw error;
+  }
+};
+
+export const updateEmployee = (cedula, employeeData) => apiRequest(`/employees/${cedula}`, 'PUT', employeeData);
+export const requestRetirement = (retirementData) => apiRequest('/employees/retire', 'POST', retirementData);
+export const approveContract = (cedula) => apiRequest(`/employees/${cedula}/juridico/approve`, 'POST', {});
+export const rejectContract = (cedula, motivo) => apiRequest(`/employees/${cedula}/juridico/reject`, 'POST', { motivo });
+export const approveRetirement = (cedula) => apiRequest(`/employees/${cedula}/retire/approve`, 'POST', {});
+export const rejectRetirement = (cedula, motivo) => apiRequest(`/employees/${cedula}/retire/reject`, 'POST', { motivo_rechazo_juridico: motivo });

@@ -1,12 +1,15 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import ModernModal from '../components/ModernModal';
 import IngresoPersonalForm from '../components/IngresoPersonalForm';
 import RetiroPersonalForm from '../components/RetiroPersonalForm';
 import ProveedoresForm from '../components/ProveedoresForm';
-import { UserPlus, UserMinus, Briefcase, Search, Filter, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Download, FileText } from 'lucide-react';
+import FormField from '../components/FormField';
+import PersonalDetailView from '../components/PersonalDetailView';
+import { UserPlus, UserMinus, Briefcase, Search, Filter, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Download, FileText, Loader2, CheckCircle, XCircle, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import useDebounce from '../hooks/useDebounce';
 import { exportToCSV, exportToXLSX } from '../utils/exportToCSV';
+import usePersonalAPI from '../hooks/usePersonalAPI';
 
 // --- Iconos para las tarjetas de opciones (usando lucide-react) ---
 const UserPlusIcon = () => <UserPlus className="h-10 w-10 text-blue-600 mb-4" />;
@@ -15,123 +18,104 @@ const BriefcaseIcon = () => <Briefcase className="h-10 w-10 text-green-600 mb-4"
 
 const AdministracionPersonal = () => {
   const [openModal, setOpenModal] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // === HOOK DE API ===
+  const {
+    employees,
+    isLoading,
+    isDetailLoading,
+    pagination,
+    fetchEmployees,
+    createEmployee,
+    updateEmployee,
+    requestRetirement,
+    pendingApprovals,
+    fetchPendingApprovals,
+    approveContract,
+    rejectContract,
+    getEmployeeDetails,
+  } = usePersonalAPI();
 
   // === GESTIÓN DE PERSONAL ===
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterRol, setFilterRol] = useState('todos');
-  const [filterDepartamento, setFilterDepartamento] = useState('todos');
+  const [filterCargo, setFilterCargo] = useState('todos');
+  const [filterArea, setFilterArea] = useState('todos');
+  const [filterEstado, setFilterEstado] = useState('ACTIVO'); // Por defecto en Activo
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [personalData, setPersonalData] = useState([]); // TODO: Conectar API
+  
   const [selectedPersonal, setSelectedPersonal] = useState(null);
   const [viewDetailModal, setViewDetailModal] = useState(false);
   const [editModal, setEditModal] = useState(false);
-  const [deleteConfirmModal, setDeleteConfirmModal] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [editFormData, setEditFormData] = useState(null);
+  const [rejectionModal, setRejectionModal] = useState({ isOpen: false, cedula: null });
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [isFormSubmitting, setIsFormSubmitting] = useState(false);
+
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
+  // Cargar empleados y aprobaciones pendientes
+  const refreshData = useCallback(() => {
+    // Si el término de búsqueda parece una cédula, ignoramos otros filtros
+    const isCedulaSearch = debouncedSearchTerm && /^\d{5,}$/.test(debouncedSearchTerm);
 
-  // === DATOS MOCK (reemplazar con API) ===
-  const mockPersonal = [
-    {
-      id: 'emp-001',
-      nombre: 'Juan Pérez García',
-      email: 'juan.perez@empresa.com',
-      telefono: '3001234567',
-      cedula: '1234567890',
-      rol: 'supervisor',
-      departamento: 'Recursos Humanos',
-      salario: 2500000,
-      fechaIngreso: '2025-01-15',
-      estado: 'activo',
-    },
-    {
-      id: 'emp-002',
-      nombre: 'María López Martínez',
-      email: 'maria.lopez@empresa.com',
-      telefono: '3009876543',
-      cedula: '0987654321',
-      rol: 'empleado',
-      departamento: 'Ventas',
-      salario: 2000000,
-      fechaIngreso: '2025-02-01',
-      estado: 'activo',
-    },
-    {
-      id: 'emp-003',
-      nombre: 'Carlos Rodríguez',
-      email: 'carlos.rodriguez@empresa.com',
-      telefono: '3005555555',
-      cedula: '5555555555',
-      rol: 'gerente',
-      departamento: 'Operaciones',
-      salario: 3500000,
-      fechaIngreso: '2024-06-10',
-      estado: 'activo',
-    },
+    const params = {
+      page: currentPage,
+      size: itemsPerPage,
+      search: debouncedSearchTerm || undefined,
+      // Solo aplicar filtros si no es una búsqueda por cédula
+      cargo: !isCedulaSearch && filterCargo !== 'todos' ? filterCargo : undefined,
+      area: !isCedulaSearch && filterArea !== 'todos' ? filterArea : undefined,
+      estado: !isCedulaSearch && filterEstado !== 'todos' ? filterEstado : undefined,
+    };
+    fetchEmployees(params);
+    fetchPendingApprovals();
+  }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCargo, filterArea, filterEstado, fetchEmployees, fetchPendingApprovals]);
+
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
+
+
+  // === OPCIONES PARA FILTROS (Simulado, idealmente vendrían de la API) ===
+  const cargosUnicos = ['todos', 'COORDINADOR', 'GESTOR', 'ABOGADO JUNIOR','ANALISTA TI', 'ANALISTA JUNIOR', 'ANALISTA SIG', 'ASISTENTE VENTAS','AUX SERVICIOS GENERALES','CIENTIFICO DATOS','DIRECTOR JURIDICO','DIRECTOR ADMINISTRATIVO Y FINANCIERA','DIRECTORA DE OPERACIONES','GERENTE GENERAL','LIDER DE PROCESOS','SUBDIRECTOR'];
+  const areasUnicas = ['todos', 'COBRANZA', 'TI', 'SEGUROS', 'ADMINISTRATIVO', 'COLOCACION', 'GERENCIA', 'JURIDICA','RRHH'];
+  const estadosUnicos = [
+    { label: 'Todos', value: 'todos' },
+    { label: 'Activo', value: 'ACTIVO' },
+    { label: 'Retirado', value: 'RETIRADO' },
+    { label: 'Pendiente Retiro', value: 'PENDIENTE_RETIRO_JURIDICO' },
+    { label: 'Rechazo Retiro', value: 'RECHAZO_RETIRO_JURIDICO' },
   ];
 
-  // === FILTRADO INTELIGENTE ===
-  const filteredPersonal = useMemo(() => {
-    let filtered = [...mockPersonal];
-
-    // Filtro por búsqueda
-    if (debouncedSearchTerm) {
-      const term = debouncedSearchTerm.toLowerCase();
-      filtered = filtered.filter(p =>
-        p.nombre.toLowerCase().includes(term) ||
-        p.email.toLowerCase().includes(term) ||
-        p.telefono.includes(term) ||
-        p.cedula.includes(term)
-      );
-    }
-
-    // Filtro por rol
-    if (filterRol !== 'todos') {
-      filtered = filtered.filter(p => p.rol === filterRol);
-    }
-
-    // Filtro por departamento
-    if (filterDepartamento !== 'todos') {
-      filtered = filtered.filter(p => p.departamento === filterDepartamento);
-    }
-
-    return filtered;
-  }, [debouncedSearchTerm, filterRol, filterDepartamento]);
-
-  // === PAGINACIÓN ===
-  const totalPages = Math.ceil(filteredPersonal.length / itemsPerPage);
-  const startIdx = (currentPage - 1) * itemsPerPage;
-  const endIdx = startIdx + itemsPerPage;
-  const paginatedPersonal = filteredPersonal.slice(startIdx, endIdx);
-
-  // === OPCIONES PARA FILTROS ===
-  const rolesUnicos = ['todos', ...new Set(mockPersonal.map(p => p.rol))];
-  const departamentosUnicos = ['todos', ...new Set(mockPersonal.map(p => p.departamento))];
-
   // === HANDLERS ===
-  const handleFormSubmit = async (formKey, data) => {
-    setIsSubmitting(true);
+  const handleFormSubmit = useCallback(async (formKey, data) => {
+    setIsFormSubmitting(true);
     try {
-      console.log(`Formulario ${formKey} enviado:`, data);
-      // TODO: Conectar API
-      // await api.createPersonal(data);
-      toast.success(`${formKey} registrado correctamente`);
+      if (formKey === 'Empleado') {
+        await createEmployee(data);
+      } else if (formKey === 'Retiro') {
+        await requestRetirement(data);
+      }
+      // TODO: Manejar 'Proveedor'
+      
       setOpenModal(null);
-      // Recargar lista (mock)
-      setPersonalData([...personalData, { ...data, id: Date.now() }]);
+      // Refrescar la lista
+      refreshData();
     } catch (error) {
-      toast.error(`Error al registrar ${formKey}: ${error.message}`);
+      // El hook ya muestra el toast de error
     } finally {
-      setIsSubmitting(false);
+      setIsFormSubmitting(false);
     }
-  };
+  }, [createEmployee, requestRetirement, refreshData]);
 
-  const handleViewDetail = (personal) => {
-    setSelectedPersonal(personal);
+  const handleViewDetail = async (personal) => {
+    setSelectedPersonal(personal); // Muestra datos básicos inmediatamente
     setViewDetailModal(true);
+    const details = await getEmployeeDetails(personal.cedula);
+    if (details) {
+      setSelectedPersonal(details); // Actualiza con todos los detalles
+    }
   };
 
   const handleEdit = (personal) => {
@@ -142,48 +126,72 @@ const AdministracionPersonal = () => {
 
   const handleDeleteClick = (personal) => {
     setSelectedPersonal(personal);
-    setDeleteConfirmModal(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    try {
-      console.log('Eliminando personal:', selectedPersonal.id);
-      // TODO: Conectar API
-      // await api.deletePersonal(selectedPersonal.id);
-      toast.success('Empleado eliminado correctamente');
-      setDeleteConfirmModal(false);
-      // Actualizar lista (mock)
-      setPersonalData(personalData.filter(p => p.id !== selectedPersonal.id));
-    } catch (error) {
-      toast.error(`Error al eliminar: ${error.message}`);
-    }
+    setOpenModal('retiro'); // Abre el modal de retiro
   };
 
   const handleSaveEdit = async () => {
+    if (!editFormData || !selectedPersonal) return;
+
+    const payload = {
+      correo_renovar: editFormData.correo_renovar,
+      extension_3cx: editFormData.extension_3cx,
+      cola: editFormData.cola,
+      adminfo: editFormData.adminfo,
+      asignacion: editFormData.asignacion,
+      jefe_inmediato: editFormData.jefe_inmediato,
+    };
+
     try {
-      console.log('Guardando cambios:', editFormData);
-      // TODO: Conectar API
-      // await api.updatePersonal(editFormData.id, editFormData);
-      toast.success('Cambios guardados correctamente');
+      await updateEmployee(selectedPersonal.cedula, payload);
       setEditModal(false);
+      refreshData();
     } catch (error) {
-      toast.error(`Error al guardar: ${error.message}`);
+      // El hook ya se encarga de mostrar el toast de error
+    }
+  };
+
+  const handleApprove = async (cedula) => {
+    try {
+      await approveContract(cedula);
+      refreshData();
+    } catch (error) {
+      // El hook maneja el error
+    }
+  };
+
+  const handleOpenRejectionModal = (cedula) => {
+    setRejectionModal({ isOpen: true, cedula });
+  };
+
+  const handleReject = async () => {
+    if (!rejectionReason) {
+      toast.error('Debes proporcionar un motivo de rechazo.');
+      return;
+    }
+    try {
+      await rejectContract(rejectionModal.cedula, rejectionReason);
+      setRejectionModal({ isOpen: false, cedula: null });
+      setRejectionReason('');
+      refreshData();
+    } catch (error) {
+      // El hook maneja el error
     }
   };
 
   // Resetear paginación cuando cambian filtros
-  React.useEffect(() => {
+  useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchTerm, filterRol, filterDepartamento]);
+  }, [debouncedSearchTerm, filterCargo, filterArea, filterEstado]);
 
-  const formConfigs = {
+  const formConfigs = useMemo(() => ({
     ingreso: {
       title: 'Ingreso de Personal',
       icon: <UserPlusIcon />,
       component: (
         <IngresoPersonalForm
           onSubmit={(data) => handleFormSubmit('Empleado', data)}
-          isSubmitting={isSubmitting}
+          onCancel={() => setOpenModal(null)}
+          isSubmitting={isFormSubmitting}
         />
       ),
     },
@@ -192,8 +200,10 @@ const AdministracionPersonal = () => {
       icon: <UserMinusIcon />,
       component: (
         <RetiroPersonalForm
+          empleado={selectedPersonal}
           onSubmit={(data) => handleFormSubmit('Retiro', data)}
-          isSubmitting={isSubmitting}
+          onCancel={() => setOpenModal(null)}
+          isSubmitting={isFormSubmitting}
         />
       ),
     },
@@ -203,53 +213,52 @@ const AdministracionPersonal = () => {
       component: (
         <ProveedoresForm
           onSubmit={(data) => handleFormSubmit('Proveedor', data)}
-          isSubmitting={isSubmitting}
+          onCancel={() => setOpenModal(null)}
+          isSubmitting={isFormSubmitting}
         />
       ),
     },
-  };
+  }), [isLoading, selectedPersonal, handleFormSubmit]);
 
   // --- FUNCIONES DE EXPORTACIÓN ---
   const handleExportCSV = useCallback(() => {
-    if (filteredPersonal.length === 0) {
+    if (employees.length === 0) {
       toast.error('No hay datos para exportar');
       return;
     }
 
     const columns = [
       { key: 'nombre', label: 'Nombre' },
-      { key: 'email', label: 'Email' },
-      { key: 'telefono', label: 'Teléfono' },
+      { key: 'correo_renovar', label: 'Email' },
+      { key: 'celular', label: 'Teléfono' },
       { key: 'cedula', label: 'Cédula' },
-      { key: 'rol', label: 'Rol' },
-      { key: 'departamento', label: 'Departamento' },
-      { key: 'salario', label: 'Salario' },
-      { key: 'fechaIngreso', label: 'Fecha Ingreso' },
+      { key: 'cargo', label: 'Cargo' },
+      { key: 'area', label: 'Área' },
+      { key: 'fecha_ingreso', label: 'Fecha Ingreso' },
       { key: 'estado', label: 'Estado' },
     ];
 
     const timestamp = new Date().toLocaleDateString('es-CO').replace(/\//g, '-');
     const filename = `personal_${timestamp}.csv`;
 
-    exportToCSV(filteredPersonal, filename, columns);
-    toast.success(`✅ Exportado ${filteredPersonal.length} registros a CSV`);
-  }, [filteredPersonal]);
+    exportToCSV(employees, filename, columns);
+    toast.success(`✅ Exportado ${employees.length} registros a CSV`);
+  }, [employees]);
 
   const handleExportExcel = useCallback(async () => {
-    if (filteredPersonal.length === 0) {
+    if (employees.length === 0) {
       toast.error('No hay datos para exportar');
       return;
     }
 
     const columns = [
       { key: 'nombre', label: 'Nombre' },
-      { key: 'email', label: 'Email' },
-      { key: 'telefono', label: 'Teléfono' },
+      { key: 'correo_renovar', label: 'Email' },
+      { key: 'celular', label: 'Teléfono' },
       { key: 'cedula', label: 'Cédula' },
-      { key: 'rol', label: 'Rol' },
-      { key: 'departamento', label: 'Departamento' },
-      { key: 'salario', label: 'Salario' },
-      { key: 'fechaIngreso', label: 'Fecha Ingreso' },
+      { key: 'cargo', label: 'Cargo' },
+      { key: 'area', label: 'Área' },
+      { key: 'fecha_ingreso', label: 'Fecha Ingreso' },
       { key: 'estado', label: 'Estado' },
     ];
 
@@ -257,9 +266,9 @@ const AdministracionPersonal = () => {
     const filename = `personal_${timestamp}.xlsx`;
 
     try {
-      const success = await exportToXLSX(filteredPersonal, filename, 'Personal', columns);
+      const success = await exportToXLSX(employees, filename, 'Personal', columns);
       if (success) {
-        toast.success(`✅ Exportado ${filteredPersonal.length} registros a Excel`);
+        toast.success(`✅ Exportado ${employees.length} registros a Excel`);
       } else {
         toast.error('❌ No se pudo exportar a Excel. Intenta de nuevo.');
       }
@@ -267,7 +276,7 @@ const AdministracionPersonal = () => {
       console.error('Error al exportar:', error);
       toast.error('❌ Error durante la exportación. Intenta de nuevo.');
     }
-  }, [filteredPersonal]);
+  }, [employees]);
 
   return (
     <>
@@ -304,18 +313,67 @@ const AdministracionPersonal = () => {
               </button>
 
               {/* Tarjeta 3: Creación de Usuarios para Proveedores */}
-              <button
-                onClick={() => setOpenModal('proveedores')}
-                className="bg-white p-8 rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 ease-in-out text-center flex flex-col items-center"
-              >
+              <div className="bg-gray-100 p-8 rounded-lg shadow-inner text-center flex flex-col items-center cursor-not-allowed">
                 <BriefcaseIcon />
-                <h2 className="text-xl font-semibold text-gray-800">Usuarios para Proveedores</h2>
-                <p className="text-gray-500 mt-2">Crear y administrar accesos para proveedores.</p>
-              </button>
+                <h2 className="text-xl font-semibold text-gray-500">Usuarios para Proveedores</h2>
+                <p className="text-gray-400 mt-2">Esta función estará disponible próximamente.</p>
+              </div>
             </div>
           </div>
 
-          {/* SECCIÓN 2: GESTIÓN DE PERSONAL */}
+          {/* SECCIÓN 2: BANDEJA DE APROBACIONES */}
+          {pendingApprovals.length > 0 && (
+            <div className="mb-12 bg-white rounded-lg shadow-lg overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-yellow-50 to-orange-50">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                  <ShieldCheck className="h-6 w-6 text-orange-600" />
+                  Bandeja de Aprobaciones Jurídicas ({pendingApprovals.length})
+                </h2>
+                <p className="text-gray-600 text-sm mt-1">Nuevos empleados pendientes de aprobación</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nombre</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Cédula</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tipo Contrato</th>
+                      <th className="px-6 py-3 text-center text-sm font-semibold text-gray-700">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {pendingApprovals.map((personal) => (
+                      <tr key={personal.cedula}>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{personal.nombre}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{personal.cedula}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{personal.contrato}</td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => handleApprove(personal.cedula)}
+                              className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
+                              title="Aprobar Contrato"
+                            >
+                              <CheckCircle className="h-5 w-5" />
+                            </button>
+                            <button
+                              onClick={() => handleOpenRejectionModal(personal.cedula)}
+                              className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                              title="Rechazar Contrato"
+                            >
+                              <XCircle className="h-5 w-5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SECCIÓN 3: GESTIÓN DE PERSONAL */}
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50">
@@ -341,20 +399,20 @@ const AdministracionPersonal = () => {
               </div>
 
               {/* Filtros */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                     <Filter className="h-4 w-4" />
-                    Rol
+                    Cargo
                   </label>
                   <select
-                    value={filterRol}
-                    onChange={(e) => setFilterRol(e.target.value)}
+                    value={filterCargo}
+                    onChange={(e) => setFilterCargo(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                   >
-                    {rolesUnicos.map(rol => (
-                      <option key={rol} value={rol}>
-                        {rol === 'todos' ? 'Todos los roles' : rol.charAt(0).toUpperCase() + rol.slice(1)}
+                    {cargosUnicos.map(cargo => (
+                      <option key={cargo} value={cargo}>
+                        {cargo === 'todos' ? 'Todos los cargos' : cargo.charAt(0).toUpperCase() + cargo.slice(1)}
                       </option>
                     ))}
                   </select>
@@ -363,16 +421,33 @@ const AdministracionPersonal = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                     <Filter className="h-4 w-4" />
-                    Departamento
+                    Área
                   </label>
                   <select
-                    value={filterDepartamento}
-                    onChange={(e) => setFilterDepartamento(e.target.value)}
+                    value={filterArea}
+                    onChange={(e) => setFilterArea(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                   >
-                    {departamentosUnicos.map(dept => (
-                      <option key={dept} value={dept}>
-                        {dept === 'todos' ? 'Todos los departamentos' : dept}
+                    {areasUnicas.map(area => (
+                      <option key={area} value={area}>
+                        {area === 'todos' ? 'Todas las áreas' : area}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <Filter className="h-4 w-4" />
+                    Estado
+                  </label>
+                  <select
+                    value={filterEstado}
+                    onChange={(e) => setFilterEstado(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    {estadosUnicos.map(estado => (
+                      <option key={estado.value} value={estado.value}>
+                        {estado.label}
                       </option>
                     ))}
                   </select>
@@ -402,7 +477,7 @@ const AdministracionPersonal = () => {
 
               {/* Info de resultados */}
               <div className="text-sm text-gray-600">
-                Mostrando <span className="font-semibold text-gray-800">{paginatedPersonal.length}</span> de <span className="font-semibold text-gray-800">{filteredPersonal.length}</span> registros
+                Mostrando <span className="font-semibold text-gray-800">{employees.length}</span> de <span className="font-semibold text-gray-800">{pagination.total}</span> registros
               </div>
             </div>
 
@@ -413,26 +488,35 @@ const AdministracionPersonal = () => {
                   <tr>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nombre</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Rol</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Departamento</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Cargo</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Área</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Fecha Ingreso</th>
                     <th className="px-6 py-3 text-center text-sm font-semibold text-gray-700">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {paginatedPersonal.length > 0 ? (
-                    paginatedPersonal.map((personal) => (
-                      <tr key={personal.id} className="hover:bg-green-50 transition-colors duration-150">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
+                        <div className="flex justify-center items-center gap-2">
+                          <Loader2 className="h-6 w-6 animate-spin text-green-600" />
+                          <span className="text-lg">Cargando personal...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : employees.length > 0 ? (
+                    employees.map((personal) => (
+                      <tr key={personal.cedula} className="hover:bg-green-50 transition-colors duration-150">
                         <td className="px-6 py-4 text-sm font-medium text-gray-900">{personal.nombre}</td>
-                        <td className="px-6 py-4 text-sm text-gray-600">{personal.email}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{personal.correo_renovar || 'N/A'}</td>
                         <td className="px-6 py-4 text-sm">
                           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 capitalize">
-                            {personal.rol}
+                            {personal.cargo}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">{personal.departamento}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{personal.area}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">
-                          {new Date(personal.fechaIngreso).toLocaleDateString('es-CO')}
+                          {personal.fecha_ingreso ? new Date(personal.fecha_ingreso).toLocaleDateString('es-CO') : 'N/A'}
                         </td>
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -453,9 +537,9 @@ const AdministracionPersonal = () => {
                             <button
                               onClick={() => handleDeleteClick(personal)}
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Eliminar"
+                              title="Solicitar Retiro"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <UserMinus className="h-4 w-4" />
                             </button>
                           </div>
                         </td>
@@ -464,8 +548,8 @@ const AdministracionPersonal = () => {
                   ) : (
                     <tr>
                       <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
-                        <p className="text-lg font-semibold">No hay registros</p>
-                        <p className="text-sm mt-1">Intenta ajustar los filtros de búsqueda</p>
+                        <p className="text-lg font-semibold">No se encontraron empleados</p>
+                        <p className="text-sm mt-1">Intenta ajustar los filtros de búsqueda o crea un nuevo empleado.</p>
                       </td>
                     </tr>
                   )}
@@ -474,10 +558,10 @@ const AdministracionPersonal = () => {
             </div>
 
             {/* Paginación */}
-            {filteredPersonal.length > 0 && (
+            {pagination.total > 0 && (
               <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
-                  Página <span className="font-semibold">{currentPage}</span> de <span className="font-semibold">{totalPages}</span>
+                  Página <span className="font-semibold">{pagination.page}</span> de <span className="font-semibold">{pagination.totalPages}</span>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -485,7 +569,7 @@ const AdministracionPersonal = () => {
                     value={itemsPerPage}
                     onChange={(e) => {
                       setItemsPerPage(Number(e.target.value));
-                      setCurrentPage(1);
+                      setCurrentPage(1); // Vuelve a la página 1 al cambiar el tamaño
                     }}
                     className="px-2 py-1 border border-gray-300 rounded text-sm"
                   >
@@ -495,16 +579,16 @@ const AdministracionPersonal = () => {
                   </select>
 
                   <button
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={pagination.page <= 1}
                     className="p-2 text-gray-600 hover:bg-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
 
                   <button
-                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(prev => Math.min(pagination.totalPages, prev + 1))}
+                    disabled={pagination.page >= pagination.totalPages}
                     className="p-2 text-gray-600 hover:bg-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="h-5 w-5" />
@@ -522,55 +606,9 @@ const AdministracionPersonal = () => {
           isOpen={viewDetailModal}
           onClose={() => setViewDetailModal(false)}
           title={`Detalles - ${selectedPersonal.nombre}`}
-          size="md"
+          size="xl"
         >
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Nombre</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{selectedPersonal.nombre}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Cédula</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{selectedPersonal.cedula}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Email</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{selectedPersonal.email}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Teléfono</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{selectedPersonal.telefono}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Rol</p>
-                <p className="text-sm font-medium text-gray-900 mt-1 capitalize">{selectedPersonal.rol}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Departamento</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{selectedPersonal.departamento}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Salario</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">${selectedPersonal.salario.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Fecha Ingreso</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{new Date(selectedPersonal.fechaIngreso).toLocaleDateString('es-CO')}</p>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-gray-200">
-              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Estado</p>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                selectedPersonal.estado === 'activo' 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {selectedPersonal.estado.charAt(0).toUpperCase() + selectedPersonal.estado.slice(1)}
-              </span>
-            </div>
-          </div>
+          <PersonalDetailView personal={selectedPersonal} isLoading={isDetailLoading} />
         </ModernModal>
       )}
 
@@ -599,111 +637,44 @@ const AdministracionPersonal = () => {
           }
         >
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
-              <input
-                type="text"
-                value={editFormData.nombre}
-                onChange={(e) => setEditFormData({...editFormData, nombre: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                label="Correo Renovar"
+                type="email"
+                value={editFormData.correo_renovar || ''}
+                onChange={(v) => setEditFormData({ ...editFormData, correo_renovar: v })}
               />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={editFormData.email}
-                  onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-                <input
-                  type="tel"
-                  value={editFormData.telefono}
-                  onChange={(e) => setEditFormData({...editFormData, telefono: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
-                <select
-                  value={editFormData.rol}
-                  onChange={(e) => setEditFormData({...editFormData, rol: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="empleado">Empleado</option>
-                  <option value="supervisor">Supervisor</option>
-                  <option value="gerente">Gerente</option>
-                  <option value="director">Director</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-                <input
-                  type="text"
-                  value={editFormData.departamento}
-                  onChange={(e) => setEditFormData({...editFormData, departamento: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Salario</label>
-              <input
-                type="number"
-                value={editFormData.salario}
-                onChange={(e) => setEditFormData({...editFormData, salario: Number(e.target.value)})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              <FormField
+                label="Jefe Inmediato"
+                value={editFormData.jefe_inmediato || ''}
+                onChange={(v) => setEditFormData({ ...editFormData, jefe_inmediato: v })}
+              />
+              <FormField
+                label="Extensión 3CX"
+                value={editFormData.extension_3cx || ''}
+                onChange={(v) => setEditFormData({ ...editFormData, extension_3cx: v })}
+              />
+              <FormField
+                label="Cola"
+                value={editFormData.cola || ''}
+                onChange={(v) => setEditFormData({ ...editFormData, cola: v })}
+              />
+              <FormField
+                label="Código Adminfo"
+                value={editFormData.adminfo || ''}
+                onChange={(v) => setEditFormData({ ...editFormData, adminfo: v })}
+              />
+              <FormField
+                label="Asignación"
+                value={editFormData.asignacion || ''}
+                onChange={(v) => setEditFormData({ ...editFormData, asignacion: v })}
               />
             </div>
           </div>
         </ModernModal>
       )}
 
-      {/* MODAL: Confirmar Eliminación */}
-      {selectedPersonal && (
-        <ModernModal
-          isOpen={deleteConfirmModal}
-          onClose={() => setDeleteConfirmModal(false)}
-          title="Confirmar eliminación"
-          size="sm"
-          actions={
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteConfirmModal(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors"
-              >
-                Eliminar
-              </button>
-            </div>
-          }
-        >
-          <div className="space-y-4">
-            <p className="text-gray-700">
-              ¿Estás seguro de que deseas eliminar a <span className="font-semibold">{selectedPersonal.nombre}</span>?
-            </p>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-sm text-red-800">
-                Esta acción no se puede deshacer. Se eliminarán todos los datos del empleado.
-              </p>
-            </div>
-          </div>
-        </ModernModal>
-      )}
+      {/* El modal de confirmación de eliminación ya no es necesario */}
 
       {/* MODAL: Formularios (Ingreso, Retiro, Proveedores) */}
       {openModal && formConfigs[openModal] && (
@@ -717,6 +688,39 @@ const AdministracionPersonal = () => {
           {formConfigs[openModal].component}
         </ModernModal>
       )}
+
+      {/* MODAL: Motivo de Rechazo */}
+      <ModernModal
+        isOpen={rejectionModal.isOpen}
+        onClose={() => setRejectionModal({ isOpen: false, cedula: null })}
+        title="Motivo de Rechazo"
+        size="md"
+        actions={
+          <div className="flex gap-3">
+            <button
+              onClick={() => setRejectionModal({ isOpen: false, cedula: null })}
+              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleReject}
+              disabled={isLoading}
+              className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg font-medium"
+            >
+              {isLoading ? 'Rechazando...' : 'Confirmar Rechazo'}
+            </button>
+          </div>
+        }
+      >
+        <FormField
+          label="Por favor, especifica el motivo del rechazo"
+          type="textarea"
+          value={rejectionReason}
+          onChange={setRejectionReason}
+          required
+        />
+      </ModernModal>
     </>
   );
 };
