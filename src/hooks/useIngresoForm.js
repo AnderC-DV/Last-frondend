@@ -68,9 +68,9 @@ const useIngresoForm = (initialState = {}) => {
       'PLANTA': 'PENDIENTE_APROBACION_JURIDICO',
       'CORRETAJE': 'PENDIENTE_APROBACION_JURIDICO',
       'TEMPORAL': 'EN_PROCESO_DE_CONTRATACION',
-      'CASA DE COBRO': 'PENDIENTE_APROBACION_JURIDICO',
+      'CASA DE COBRO': 'ACTIVO',
     };
-    return estadoMap[tipoContrato] || 'EN_PROCESO_DE_CONTRATACION';
+    return estadoMap[tipoContrato] || 'ACTIVO';
   }, []);
 
   /**
