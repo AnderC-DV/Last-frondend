@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { 
   ArrowLeft, Phone, Download, AlertTriangle, Copy, 
-  BarChart2, TrendingUp, Search, RefreshCw, ChevronLeft, ChevronRight, Calendar, ListFilter
+  BarChart2, TrendingUp, Search, RefreshCw, ChevronLeft, ChevronRight, Calendar, ListFilter,
+  UserPlus, Plus, Check, X, Users, Trash2
 } from 'lucide-react';
 import { 
   BarChart, Bar, ComposedChart, Line, ReferenceLine,
@@ -92,6 +93,116 @@ export default function CallsReportPage() {
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [hasFetchedAlerts, setHasFetchedAlerts] = useState(false);
 
+  // --- State: Relations & Mapping Modal ---
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assignValor, setAssignValor] = useState('');
+  const [selectedAdminfo, setSelectedAdminfo] = useState('');
+  const [searchGestor, setSearchGestor] = useState('');
+  const [isSavingRelation, setIsSavingRelation] = useState(false);
+  const [employeesList, setEmployeesList] = useState([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [showExistingRelations, setShowExistingRelations] = useState(false);
+  const [existingRelations, setExistingRelations] = useState([]);
+  const [loadingRelations, setLoadingRelations] = useState(false);
+  const [relationsSearch, setRelationsSearch] = useState('');
+
+  // Búsqueda en servidor con LIKE: únicamente cuando el usuario escribe al menos 2 caracteres
+  useEffect(() => {
+    if (!searchGestor.trim() || searchGestor.trim().length < 2) {
+      setEmployeesList([]);
+      setLoadingEmployees(false);
+      return;
+    }
+    setLoadingEmployees(true);
+    const timer = setTimeout(async () => {
+      try {
+        const resp = await api.getEmployees({ search: searchGestor.trim(), size: 20 });
+        const items = resp?.items || resp?.data || (Array.isArray(resp) ? resp : []);
+        setEmployeesList(items.filter(e => e && e.adminfo));
+      } catch (err) {
+        console.error('Error buscando colaboradores:', err);
+      } finally {
+        setLoadingEmployees(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchGestor]);
+
+  const handleOpenAssignModal = (valor = '') => {
+    setAssignValor(valor);
+    setSelectedAdminfo('');
+    setSearchGestor('');
+    setEmployeesList([]);
+    setIsAssignModalOpen(true);
+  };
+
+  const handleSaveRelation = async (e) => {
+    e?.preventDefault();
+    if (!assignValor.trim()) {
+      toast.error('Debe ingresar el valor 3CX (extensión o nombre).');
+      return;
+    }
+    if (!selectedAdminfo.trim()) {
+      toast.error('Debe seleccionar o ingresar el gestor (adminfo).');
+      return;
+    }
+    setIsSavingRelation(true);
+    try {
+      await api.createRelacion3xGestor({
+        nombre: assignValor.trim(),
+        adminfo: selectedAdminfo.trim().toLowerCase()
+      });
+      toast.success(`Relación guardada: ${assignValor.trim()} ➔ ${selectedAdminfo.trim()}. Recalculando llamadas...`);
+      setIsAssignModalOpen(false);
+      fetchAlertsNN();
+      if (showExistingRelations) {
+        fetchExistingRelations();
+      }
+    } catch (err) {
+      toast.error('Error al guardar relación: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setIsSavingRelation(false);
+    }
+  };
+
+  const fetchExistingRelations = async () => {
+    setLoadingRelations(true);
+    try {
+      const resp = await api.getRelacion3xGestor();
+      const arr = resp?.data || (Array.isArray(resp) ? resp : []);
+      setExistingRelations(arr);
+    } catch (err) {
+      toast.error('Error al obtener relaciones: ' + err.message);
+    } finally {
+      setLoadingRelations(false);
+    }
+  };
+
+  const handleDeleteRelation = async (id, nombre, adminfo) => {
+    if (!window.confirm(`¿Está seguro de eliminar la relación de "${nombre}" con "${adminfo}"?`)) {
+      return;
+    }
+    try {
+      await api.deleteRelacion3xGestor(id);
+      toast.success('Relación eliminada exitosamente.');
+      fetchExistingRelations();
+      fetchAlertsNN();
+    } catch (err) {
+      toast.error('Error al eliminar relación: ' + err.message);
+    }
+  };
+
+  const filteredEmployees = employeesList;
+
+  const filteredExistingRelations = useMemo(() => {
+    if (!relationsSearch.trim()) return existingRelations;
+    const q = relationsSearch.toLowerCase().trim();
+    return existingRelations.filter(r => 
+      (r.nombre && r.nombre.toLowerCase().includes(q)) ||
+      (r.adminfo && r.adminfo.toLowerCase().includes(q))
+    );
+  }, [existingRelations, relationsSearch]);
+
   // --- Initial Fetch for Alerts Badge ---
   useEffect(() => {
     fetchAlertsNN(true); // silent fetch for badge
@@ -142,10 +253,10 @@ export default function CallsReportPage() {
     }
   };
 
-  const fetchAlertsNN = async (silent = false) => {
+  const fetchAlertsNN = async (silent = false, forceRefresh = false) => {
     if (!silent) setLoadingAlerts(true);
     try {
-      const data = await api.getCallsAlertsNN();
+      const data = await api.getCallsAlertsNN(forceRefresh);
       const arrData = Array.isArray(data) ? data : (data?.data || data?.items || data?.results || []);
       setAlertsData(arrData);
       setHasFetchedAlerts(true);
@@ -1381,21 +1492,115 @@ export default function CallsReportPage() {
               ALERTAS NN TAB 
              ========================================= */}
           {activeTab === 'nn' && (
-            <div className="max-w-4xl mx-auto py-4 animate-in fade-in duration-300">
+            <div className="max-w-5xl mx-auto py-4 animate-in fade-in duration-300 space-y-6">
               
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                  <div>
                    <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                      <AlertTriangle className="h-5 w-5 text-red-500" /> 
                      Gestores no Identificados
                    </h2>
-                   <p className="text-sm text-gray-500 mt-1">Nombres o extensiones en 3CX que no tienen mapeo a `adminfo` en el diccionario.</p>
+                   <p className="text-sm text-gray-500 mt-1">
+                     Nombres o extensiones en 3CX sin mapeo a `adminfo` o cuyo gestor previo ya no se encuentra activo.
+                   </p>
                  </div>
-                 <button onClick={() => fetchAlertsNN()} className="p-2 border border-gray-300 rounded hover:bg-gray-50">
-                    <RefreshCw className={`h-4 w-4 text-gray-600 ${loadingAlerts ? 'animate-spin' : ''}`} />
-                 </button>
+                 <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => handleOpenAssignModal()} 
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Nueva Relación
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowExistingRelations(!showExistingRelations);
+                        if (!showExistingRelations && existingRelations.length === 0) {
+                          fetchExistingRelations();
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 text-xs font-medium rounded-lg transition-colors"
+                    >
+                      <Users className="h-4 w-4 text-gray-500" />
+                      {showExistingRelations ? 'Ocultar Mapeos' : 'Ver Mapeos'}
+                    </button>
+                    <button 
+                      onClick={() => fetchAlertsNN(false, true)} 
+                      title="Recargar y regenerar alertas"
+                      className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <RefreshCw className={`h-4 w-4 text-gray-600 ${loadingAlerts ? 'animate-spin' : ''}`} />
+                    </button>
+                 </div>
               </div>
 
+              {/* Drawer/Card de Mapeos Existentes */}
+              {showExistingRelations && (
+                <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs animate-in fade-in duration-200">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                        <Users className="h-4 w-4 text-blue-600" />
+                        Diccionario Actual de Relaciones 3CX ({existingRelations.length})
+                      </h3>
+                      <p className="text-xs text-gray-500">Mapeos activos de nombres/extensiones 3CX hacia usuarios adminfo.</p>
+                    </div>
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar mapeo o adminfo..."
+                        value={relationsSearch}
+                        onChange={(e) => setRelationsSearch(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {loadingRelations ? (
+                    <div className="flex justify-center p-6"><RefreshCw className="h-6 w-6 text-blue-500 animate-spin" /></div>
+                  ) : filteredExistingRelations.length === 0 ? (
+                    <p className="text-xs text-gray-500 py-4 text-center">No se encontraron relaciones registradas.</p>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto border border-gray-100 rounded-lg">
+                      <table className="min-w-full divide-y divide-gray-200 text-xs">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-medium text-gray-500">ID</th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-500">3CX (Nombre / Extensión)</th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-500">Adminfo Gestor</th>
+                            <th className="px-3 py-2 text-right font-medium text-gray-500">Acción</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 bg-white">
+                          {filteredExistingRelations.map(rel => (
+                            <tr key={rel.id} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 text-gray-400">{rel.id}</td>
+                              <td className="px-3 py-2 font-medium text-gray-800">{rel.nombre}</td>
+                              <td className="px-3 py-2">
+                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded font-mono font-semibold">
+                                  {rel.adminfo}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <button
+                                  onClick={() => handleDeleteRelation(rel.id, rel.nombre, rel.adminfo)}
+                                  className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors"
+                                  title="Eliminar mapeo"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tabla de Alertas NN */}
               {loadingAlerts ? (
                 <div className="flex justify-center p-12"><RefreshCw className="h-8 w-8 text-blue-500 animate-spin" /></div>
               ) : alertsData.length === 0 ? (
@@ -1407,7 +1612,7 @@ export default function CallsReportPage() {
                    <p className="text-sm mt-1 text-green-700">Todos los gestores de las llamadas recientes están identificados correctamente en el diccionario.</p>
                 </div>
               ) : (
-                <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                <div className="border border-gray-200 rounded-lg overflow-hidden shadow-xs bg-white">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
@@ -1420,26 +1625,192 @@ export default function CallsReportPage() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {alertsData.map(alert => (
-                        <tr key={alert.id} className="hover:bg-gray-50">
+                        <tr key={alert.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{alert.id}</td>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{alert.valor_sin_relacion}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{alert.origen}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{new Date(alert.fecha_alerta).toLocaleString()}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                            <span className="font-mono bg-amber-50 text-amber-900 px-2 py-0.5 rounded border border-amber-200">
+                              {alert.valor_sin_relacion}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                              {alert.origen}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">{new Date(alert.fecha_alerta).toLocaleString()}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                            <button
+                              onClick={() => handleOpenAssignModal(alert.valor_sin_relacion)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg shadow-2xs transition-colors"
+                              title="Asignar gestor a este valor"
+                            >
+                              <UserPlus className="h-3.5 w-3.5" />
+                              Asignar Gestor
+                            </button>
                             <button 
                               onClick={() => {
                                 navigator.clipboard.writeText(alert.valor_sin_relacion);
                                 toast.success('Copiado al portapapeles');
                               }}
-                              className="text-blue-600 hover:text-blue-900 inline-flex items-center gap-1 p-1 rounded hover:bg-blue-50"
+                              className="text-gray-500 hover:text-gray-700 inline-flex items-center p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                              title="Copiar al portapapeles"
                             >
-                              <Copy className="h-4 w-4" /> <span className="sr-only">Copiar</span>
+                              <Copy className="h-4 w-4" />
                             </button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {/* MODAL PARA ASIGNAR GESTOR A VALOR 3CX */}
+              {isAssignModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+                  <div className="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                          <UserPlus className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-800 text-base">Asignar Relación 3CX - Gestor</h3>
+                          <p className="text-xs text-gray-500">Mapea la extensión o identificador telefónico al usuario del gestor</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setIsAssignModalOpen(false)}
+                        className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSaveRelation} className="p-6 space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                          Valor en 3CX (Extensión o Nombre)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={assignValor}
+                          onChange={(e) => setAssignValor(e.target.value)}
+                          placeholder="Ej: 1048 o PEREZ, JUAN (1048)"
+                          className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
+                        />
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          Este es el valor exacto que registra la PBX 3CX en los registros de llamadas.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                          Gestor Asignado (adminfo)
+                        </label>
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                            <input
+                              type="text"
+                              value={searchGestor}
+                              onChange={(e) => setSearchGestor(e.target.value)}
+                              placeholder="Buscar por nombre, cédula o adminfo..."
+                              className="w-full pl-9 pr-3.5 py-2 text-xs border border-gray-200 rounded-lg bg-gray-50/50 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto divide-y divide-gray-100 bg-gray-50/30">
+                            {loadingEmployees ? (
+                              <div className="p-4 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
+                                <RefreshCw className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                                Buscando colaboradores coincidentes...
+                              </div>
+                            ) : !searchGestor.trim() || searchGestor.trim().length < 2 ? (
+                              <div className="p-4 text-center text-xs text-gray-400">
+                                Escribe al menos 2 letras para buscar por nombre, cédula o adminfo...
+                              </div>
+                            ) : filteredEmployees.length === 0 ? (
+                              <div className="p-4 text-center text-xs text-gray-500 space-y-2">
+                                <p>No se encontraron colaboradores con "{searchGestor}".</p>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedAdminfo(searchGestor.trim().toLowerCase())}
+                                  className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
+                                >
+                                  Usar "{searchGestor.trim()}" como adminfo
+                                </button>
+                              </div>
+                            ) : (
+                              filteredEmployees.map(emp => {
+                                const isSelected = selectedAdminfo.toLowerCase() === emp.adminfo?.toLowerCase();
+                                return (
+                                  <button
+                                    type="button"
+                                    key={emp.cedula || emp.adminfo}
+                                    onClick={() => setSelectedAdminfo(emp.adminfo)}
+                                    className={`w-full text-left px-3 py-2 flex items-center justify-between text-xs transition-colors ${
+                                      isSelected ? 'bg-blue-50 text-blue-900 font-semibold' : 'hover:bg-gray-100/70 text-gray-700'
+                                    }`}
+                                  >
+                                    <div>
+                                      <p className="font-medium text-gray-900">{emp.nombre}</p>
+                                      <p className="text-[11px] text-gray-500">{emp.cargo || 'Sin cargo'} · C.C. {emp.cedula}</p>
+                                    </div>
+                                    <span className={`px-2 py-0.5 rounded font-mono text-[11px] font-bold ${
+                                      isSelected ? 'bg-blue-200 text-blue-800' : 'bg-gray-200 text-gray-700'
+                                    }`}>
+                                      {emp.adminfo}
+                                    </span>
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+
+                          <div className="pt-1">
+                            <label className="text-[11px] text-gray-500 mb-1 block">O escribe el código `adminfo` directamente:</label>
+                            <input
+                              type="text"
+                              required
+                              value={selectedAdminfo}
+                              onChange={(e) => setSelectedAdminfo(e.target.value)}
+                              placeholder="Ej: amchaparro"
+                              className="w-full px-3.5 py-1.5 text-xs font-mono font-bold text-blue-900 bg-blue-50/50 border border-blue-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t border-gray-100 flex justify-end gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setIsAssignModalOpen(false)}
+                          className="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSavingRelation || !assignValor.trim() || !selectedAdminfo.trim()}
+                          className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:pointer-events-none rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+                        >
+                          {isSavingRelation ? (
+                            <>
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                              Guardando y recalculando...
+                            </>
+                          ) : (
+                            <>
+                              <Check className="h-3.5 w-3.5" />
+                              Guardar y Recalcular
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               )}
 

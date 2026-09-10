@@ -964,8 +964,19 @@ export const getCallsDetail = ({ fecha_inicio, fecha_fin, adminfo, coordinador }
   return apiRequest(`/reports-etl/informe-llamadas/detalle?${params}`);
 };
 
-export const getCallsAlertsNN = () =>
-  apiRequest('/reports-etl/informe-llamadas/alertas-nn');
+export const getCallsAlertsNN = (refresh = false) =>
+  apiRequest(`/reports-etl/informe-llamadas/alertas-nn${refresh ? '?refresh=true' : ''}`);
+
+export const createRelacion3xGestor = (data) =>
+  apiRequest('/reports-etl/llamadas/relacion-3x-gestor', 'POST', data);
+
+export const getRelacion3xGestor = (adminfo) => {
+  const query = adminfo ? `?adminfo=${encodeURIComponent(adminfo)}` : '';
+  return apiRequest(`/reports-etl/llamadas/relacion-3x-gestor${query}`);
+};
+
+export const deleteRelacion3xGestor = (id) =>
+  apiRequest(`/reports-etl/llamadas/relacion-3x-gestor/${id}`, 'DELETE');
 
 // --- Endpoints de Instancias de Evolution API ---
 export const getEvolutionInstances = () => apiRequest('/whatsapp/evolution-instances/');
